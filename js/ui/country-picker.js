@@ -51,11 +51,13 @@ class CountryPicker {
         }
         return this.sync();
       }
-      const reg = e.target.closest("[data-region-all]");
+      // Region links: "Select all" ticks every country shown; "Clear" unticks them.
+      const reg = e.target.closest("[data-region-all], [data-region-clear]");
       if (reg) {
-        const boxes = [...reg.closest(".cp-region").querySelectorAll(".cp-country:not([hidden]) input")];
-        const allOn = boxes.every(b => b.checked);
-        boxes.forEach(b => allOn ? this.stage.countries.delete(b.value) : this.stage.countries.add(b.value));
+        const all = reg.hasAttribute("data-region-all");
+        for (const b of reg.closest(".cp-region").querySelectorAll(".cp-country:not([hidden]) input")) {
+          all ? this.stage.countries.add(b.value) : this.stage.countries.delete(b.value);
+        }
         this.sync();
       }
     });
@@ -108,7 +110,7 @@ class CountryPicker {
       if (!list.length) continue;
       list.sort((a, b) => a.name.localeCompare(b.name));
       html += `<section class="cp-region">
-        <div class="cp-region-head"><h3 class="cp-h">${esc(region)}</h3><button type="button" class="linkbtn" data-region-all>Select all</button></div>
+        <div class="cp-region-head"><h3 class="cp-h">${esc(region)}</h3><span class="cp-region-acts"><button type="button" class="linkbtn" data-region-all>Select all</button><button type="button" class="linkbtn" data-region-clear>Clear</button></span></div>
         <div class="cp-grid">${list.map(c => `
           <label class="cp-country${counts.get(c.code) ? "" : " is-zero"}">
             <input type="checkbox" value="${c.code}">${Countries.flag(c.code)}
@@ -143,7 +145,9 @@ class CountryPicker {
     });
     this.body.querySelectorAll(".cp-region").forEach(r => {
       const boxes = [...r.querySelectorAll("input")];
-      r.querySelector("[data-region-all]").textContent = boxes.length && boxes.every(b => b.checked) ? "Clear" : "Select all";
+      // "Select all" until every country is ticked; "Clear" as soon as any is.
+      r.querySelector("[data-region-all]").hidden = boxes.length > 0 && boxes.every(b => b.checked);
+      r.querySelector("[data-region-clear]").hidden = !boxes.some(b => b.checked);
     });
     const total = Filters.countrySet(st, groups);
     const names = [...st.groups].map(id => (groups.get(id) || {}).name).filter(Boolean);

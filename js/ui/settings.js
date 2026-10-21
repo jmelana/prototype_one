@@ -86,6 +86,7 @@ class SettingsPanel {
         case "del-yes": this.confirmDelete = null; this.opts.groups.remove(id); p.querySelector("[data-act=new]").focus(); break;
         case "cancel": this.edit = null; this.renderGroups(); p.querySelector("[data-act=new]").focus(); break;
         case "unpick": this.edit.members.delete(b.dataset.code); this.syncEditor(); break;
+        case "clear-members": this.edit.members.clear(); this.syncEditor(); break;
       }
     });
     p.addEventListener("change", e => {
@@ -179,7 +180,7 @@ class SettingsPanel {
         <label class="field"><span class="field-label">Group name</span>
           <input type="text" name="name" maxlength="40" autocomplete="off" placeholder="e.g. My Trading Countries" value="${esc(name)}"></label>
         <div class="field">
-          <span class="field-label">Countries <span class="n" data-count></span></span>
+          <span class="field-label">Countries <span class="field-acts"><span class="n" data-count></span><button type="button" class="linkbtn" data-act="clear-members">Clear</button></span></span>
           <div class="sel-chips" aria-live="polite"></div>
           <input type="search" name="find" placeholder="Find a country" aria-label="Find a country" autocomplete="off">
           <div class="pick-list" role="group" aria-label="Countries in this group">${list}</div>
@@ -198,6 +199,7 @@ class SettingsPanel {
     const p = this.panes.groups, m = this.edit.members;
     p.querySelectorAll(".pick-list input").forEach(b => { b.checked = m.has(b.value); });
     p.querySelector("[data-count]").textContent = `${m.size} selected`;
+    p.querySelector("[data-act=clear-members]").hidden = !m.size;
     p.querySelector(".sel-chips").innerHTML = m.size
       ? [...m].map(c => `<span class="chip">${Countries.flag(c)}${esc(Countries.name(c))}<button type="button" class="chip-x" data-act="unpick" data-code="${c}" aria-label="Remove ${esc(Countries.name(c))}">${Icons.x}</button></span>`).join("")
       : `<span class="set-empty">No countries yet. Tick them below.</span>`;
