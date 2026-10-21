@@ -376,6 +376,7 @@ tbody tr[data-alert="triggered"] td:first-child { box-shadow: inset 3px 0 0 var(
 .gbadge.custom { border: 0; color: var(--accent-text); }
 .cp-h { margin: 14px 10px 6px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
 .cp-region-head { display: flex; align-items: baseline; justify-content: space-between; padding-right: 10px; }
+.cp-region-acts, .field-acts { display: inline-flex; align-items: baseline; gap: 14px; }
 .cp-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 12px; }
 .cp-country { display: flex; align-items: center; gap: 10px; min-height: 38px; padding: 4px 10px; border-radius: 6px; cursor: pointer; font-size: 13.5px; }
 .cp-country:hover { background: var(--panel-2); }
