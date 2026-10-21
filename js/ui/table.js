@@ -5,7 +5,9 @@
 //
 // Day headers fold like parent rows in a JavaFX TreeTableView: a disclosure
 // triangle on the left (▼ open, ▶ folded); click the header, or press ← / →
-// when it has focus. Folded days stay folded across re-renders this session.
+// when it has focus. A day's starting state comes from render's `autoFold`
+// (past days of the current week); once the user folds or unfolds a day, that
+// choice wins for the rest of the session.
 //
 //   new EventsTable(tbodyEl, { alerts, onBell(event) })
 class EventsTable {
@@ -15,7 +17,8 @@ class EventsTable {
     this.rows = new Map(); // event id -> { tr, e, statusKey }
     this.todayKey = "";
     this.zone = "local";
-    this.collapsed = new Set(); // "YYYY-MM-DD" days that are folded
+    this.folds = new Map();     // "YYYY-MM-DD" -> folded? (user's choice)
+    this.autoFold = () => false; // default when the user hasn't chosen
     tbody.addEventListener("click", e => {
       const t = e.target.closest(".day-toggle");
       if (t) return this.setDay(t, t.getAttribute("aria-expanded") === "true");
@@ -34,7 +37,7 @@ class EventsTable {
   // Fold (collapse = true) or unfold one day.
   setDay(toggle, collapse) {
     const day = toggle.closest("tr").dataset.day;
-    collapse ? this.collapsed.add(day) : this.collapsed.delete(day);
+    this.folds.set(day, collapse);
     toggle.setAttribute("aria-expanded", !collapse);
     for (const tr of this.tbody.querySelectorAll(`tr[data-id][data-day="${day}"]`)) tr.hidden = collapse;
   }
@@ -46,7 +49,10 @@ class EventsTable {
   static IMPACT_SHORT = { high: "High", medium: "Med", low: "Low" };
 
   // events: already filtered; emptyHtml shown when there are none.
-  render(events, { zone, now, emptyHtml }) {
+  isFolded(day) { return this.folds.has(day) ? this.folds.get(day) : this.autoFold(day); }
+
+  render(events, { zone, now, emptyHtml, autoFold = () => false }) {
+    this.autoFold = autoFold;
     this.zone = zone;
     this.rows.clear();
     this.todayKey = Time.dayKey(new Date(now), zone);
@@ -64,7 +70,7 @@ class EventsTable {
     for (const { day } of keyed) perDay.set(day, (perDay.get(day) || 0) + 1);
     let out = "", lastDay = "", n = 0; // n: row number within the day, for striping
     for (const { e, day } of keyed) {
-      const folded = this.collapsed.has(day);
+      const folded = this.isFolded(day);
       if (day !== lastDay) {
         const rel = day === this.todayKey ? ` <span class="day-tag">Today</span>` : "";
         const c = perDay.get(day);

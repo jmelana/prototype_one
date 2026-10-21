@@ -418,7 +418,9 @@ function startApp({ apiKey, onLogout }) {
   }
   function renderTable() {
     const rows = Filters.apply(events, state, groups, dayOf);
-    table.render(rows, { zone, now: Date.now(), emptyHtml: emptyHtml() });
+    // Showing this week: days before today start folded (the user can unfold them).
+    const t = today(), thisWeek = !day && isDefaultRange();
+    table.render(rows, { zone, now: Date.now(), emptyHtml: emptyHtml(), autoFold: d => thisWeek && d < t });
     return rows.length;
   }
 
@@ -478,6 +480,7 @@ function startApp({ apiKey, onLogout }) {
   function tick() {
     const now = Date.now();
     alerts.check();
+    scheduleReleasePoll();
     if (table.tick(now)) { // calendar day rolled over: "this week" and "today" follow the clock
       if (picked.from === shownWeek.from && picked.to === shownWeek.to) picked = defaultRange();
       shownWeek = defaultRange();
@@ -488,8 +491,9 @@ function startApp({ apiKey, onLogout }) {
   document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
 
   // ---- Data loading --------------------------------------------------------------
-  // Live Finnhub data, refreshed every few minutes so actuals replace "Awaiting"
-  // (and alerts waiting on a release fire). If Finnhub fails before anything has
+  // Live Finnhub data, refreshed every few minutes (and about a minute after each
+  // release, see scheduleReleasePoll) so actuals replace "Awaiting" and alerts
+  // waiting on a release fire. If Finnhub fails before anything has
   // loaded, the bundled sample is shown and labeled as not live; the timer keeps
   // retrying and switches to live data once Finnhub answers.
   let loading = true, lastRaw = "", refreshTimer = null, mode = "live", loaded = null, rangeTimer = null;
@@ -521,6 +525,7 @@ function startApp({ apiKey, onLogout }) {
       loaded = win;
       if (text !== lastRaw) { lastRaw = text; load(JSON.parse(text)); } // skip re-render when unchanged
       setSource(`Live · updated ${clock()}`, "live");
+      scheduleReleasePoll();
     } catch (err) {
       if (mode === "live" && lastRaw) {
         setSource(`Live · update failed at ${clock()} (${err.message}); retrying automatically`, "warn");
@@ -549,6 +554,28 @@ function startApp({ apiKey, onLogout }) {
     clearInterval(refreshTimer);
     refreshTimer = setInterval(refreshLive, REFRESH_MS);
     return refreshLive();
+  }
+
+  // ---- Release polling ------------------------------------------------------------
+  // About a minute after each scheduled release, fetch again so the actual value and
+  // "Released" show up promptly instead of at the next 5-minute refresh. Releases at
+  // the same time share one fetch; speeches, holidays and released events don't count.
+  // tick() re-checks the schedule, so a failed fetch or a sleeping computer recovers.
+  const RELEASE_POLL_DELAY = 60e3;
+  let releaseTimer = null, releaseDue = Infinity;
+  function scheduleReleasePoll() {
+    const now = Date.now();
+    let next = Infinity;
+    if (mode === "live") {
+      for (const e of events) {
+        const due = e.ts + RELEASE_POLL_DELAY;
+        if (due > now && due < next && e.actual == null && e.expectsValue && !e.holiday) next = due;
+      }
+    }
+    if (next === releaseDue) return; // already scheduled
+    clearTimeout(releaseTimer);
+    releaseDue = next;
+    if (next !== Infinity) releaseTimer = setTimeout(() => { releaseDue = Infinity; refreshLive(); }, Math.min(next - now, 2 ** 31 - 1));
   }
 
   $("logout").addEventListener("click", () => onLogout());
