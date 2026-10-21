@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Prototype Portal</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230b6e72' stroke-width='2' stroke-linecap='round'%3E%3Crect width='18' height='18' x='3' y='4' rx='2'/%3E%3Cpath d='M16 2v4M8 2v4M3 10h18'/%3E%3C/svg%3E">
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flag-icons@7.5.0/css/flag-icons.min.css">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+<main id="login" class="login" hidden>
+  <form id="loginForm" class="login-card" novalidate>
+    <h1>Prototype Portal</h1>
+    <p class="login-sub">Enter the password you were given.</p>
+    <!-- Hidden username lets password managers save the demo password -->
+    <input type="text" name="username" value="demo" autocomplete="username" hidden>
+    <label class="field">
+      <span class="field-label">Password</span>
+      <input type="password" id="password" autocomplete="current-password" required aria-describedby="loginError">
+    </label>
+    <label class="check"><input type="checkbox" id="showPassword"> Show password</label>
+    <p class="form-err" id="loginError" role="alert"></p>
+    <button type="submit" class="btn primary login-btn">Log in</button>
+  </form>
+</main>
+
+<div class="wrap" id="app" hidden>
+  <header class="top">
+    <h1>Economic Calendar</h1>
+    <button type="button" class="linkbtn" id="logout">Log out</button>
+  </header>
+
+  <section class="toolbar" aria-label="Filters">
+    <div class="tb-left">
+      <div class="tb-dates" id="dates" role="group" aria-label="Date range">
+        <button type="button" id="todayBtn" class="tb-btn" aria-pressed="false">Today</button>
+        <button type="button" id="prevWeek" class="tb-arrow" aria-label="Previous week" title="Previous week"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+        <label class="tb-btn tb-datebox" id="dateFromBox"><input type="date" id="dateFrom" class="tb-date" aria-label="From date" required><span class="tb-calbtn"><svg class="ico tb-cal" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span></label>
+        <span class="tb-dash" aria-hidden="true">–</span>
+        <label class="tb-btn tb-datebox" id="dateToBox"><input type="date" id="dateTo" class="tb-date" aria-label="To date" required><span class="tb-calbtn"><svg class="ico tb-cal" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span></label>
+        <button type="button" id="nextWeek" class="tb-arrow" aria-label="Next week" title="Next week"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+        <button type="button" id="thisWeek" class="tb-arrow tb-reset" aria-label="Back to this week" title="Back to this week"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
+      </div>
+      <label class="tb-btn tb-pick" id="holidaysPick">
+        <svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        <span class="tb-label">Holidays</span>
+        <select id="holidays" aria-label="Holidays">
+          <option value="hide">Hide</option>
+          <option value="show" selected>Show</option>
+          <option value="only">Only</option>
+        </select>
+      </label>
+      <div id="ddImpact"></div>
+      <div id="ddTypes"></div>
+    </div>
+    <div class="tb-right">
+      <div class="search">
+        <svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="search" id="q" placeholder="Search events" aria-label="Search events by name" autocomplete="off">
+        <button type="button" id="qClear" class="icon-btn sm" aria-label="Clear search" title="Clear search" hidden>
+          <svg class="ico" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>
+        </button>
+      </div>
+      <div class="dd"><button type="button" id="countryBtn" class="tb-btn icon-only" aria-haspopup="dialog"></button></div>
+      <button type="button" id="gear" class="tb-btn icon-only" aria-label="Settings: country groups and alerts" title="Settings" aria-expanded="false" aria-controls="settings">
+        <svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/></svg>
+      </button>
+    </div>
+  </section>
+
+  <div class="daytabs" id="daytabs" role="group" aria-label="Day" hidden></div>
+
+  <div class="statusbar">
+    <div class="count" id="count" aria-live="polite"></div>
+    <div class="active" id="active"></div>
+    <div class="tz-note"><span id="source" class="source"></span><label class="tz-pick">Times in <select id="tz" aria-label="Time zone"></select></label></div>
+  </div>
+
+  <div class="sr" id="announce" aria-live="assertive"></div>
+
+  <div class="tablebox">
+    <table>
+      <colgroup>
+        <col class="w-time"><col class="w-ctry"><col class="w-imp"><col class="w-ev">
+        <col class="w-num"><col class="w-num"><col class="w-num"><col class="w-st"><col class="w-alert">
+      </colgroup>
+      <thead><tr>
+        <th scope="col" id="thTime">Time</th>
+        <th scope="col">Country</th>
+        <th scope="col">Impact</th>
+        <th scope="col">Event</th>
+        <th scope="col" class="num">Actual</th>
+        <th scope="col" class="num">Forecast</th>
+        <th scope="col" class="num">Previous</th>
+        <th scope="col">Status</th>
+        <th scope="col" class="c-alert">Alert</th>
+      </tr></thead>
+      <tbody id="rows"></tbody>
+    </table>
+  </div>
+</div>
+
+<dialog id="countryDialog" class="modal"></dialog>
+<dialog id="settings" class="modal settings-modal"></dialog>
+<dialog id="alarmDialog" class="modal alarm-modal"></dialog>
+
+<script src="js/data/credentials.js"></script>
+<script src="js/data/country-groups.js"></script>
+<script src="js/ui/icons.js"></script>
+<script src="js/store.js"></script>
+<script src="js/countries.js"></script>
+<script src="js/groups.js"></script>
+<script src="js/time.js"></script>
+<script src="js/events.js"></script>
+<script src="js/filters.js"></script>
+<script src="js/alerts.js"></script>
+<script src="js/vault.js"></script>
+<script src="js/finnhub.js"></script>
+<script src="js/ui/multiselect.js"></script>
+<script src="js/ui/country-picker.js"></script>
+<script src="js/ui/settings.js"></script>
+<script src="js/ui/table.js"></script>
+<script src="js/ui/alarm.js"></script>
+<script src="js/app.js"></script>
+<script src="js/auth.js"></script>
+</body>
+</html>

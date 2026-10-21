@@ -1,0 +1,169 @@
+// ---- Economic events table ---------------------------------------------------
+// render() rebuilds rows when filters or the time zone change. tick() and
+// refreshAlerts() patch status and bell cells in place, so periodic updates
+// don't reset hover, focus or scroll.
+//
+// Day headers fold like parent rows in a JavaFX TreeTableView: a disclosure
+// triangle on the left (▼ open, ▶ folded); click the header, or press ← / →
+// when it has focus. Folded days stay folded across re-renders this session.
+//
+//   new EventsTable(tbodyEl, { alerts, onBell(event) })
+class EventsTable {
+  constructor(tbody, opts) {
+    this.tbody = tbody;
+    this.opts = opts;
+    this.rows = new Map(); // event id -> { tr, e, statusKey }
+    this.todayKey = "";
+    this.zone = "local";
+    this.collapsed = new Set(); // "YYYY-MM-DD" days that are folded
+    tbody.addEventListener("click", e => {
+      const t = e.target.closest(".day-toggle");
+      if (t) return this.setDay(t, t.getAttribute("aria-expanded") === "true");
+      const b = e.target.closest(".bell");
+      if (b && !b.disabled) {
+        const r = this.rows.get(b.closest("tr").dataset.id);
+        if (r) opts.onBell(r.e);
+      }
+    });
+    tbody.addEventListener("keydown", e => {
+      const t = e.target.closest(".day-toggle");
+      if (t && (e.key === "ArrowLeft" || e.key === "ArrowRight")) { e.preventDefault(); this.setDay(t, e.key === "ArrowLeft"); }
+    });
+  }
+
+  // Fold (collapse = true) or unfold one day.
+  setDay(toggle, collapse) {
+    const day = toggle.closest("tr").dataset.day;
+    collapse ? this.collapsed.add(day) : this.collapsed.delete(day);
+    toggle.setAttribute("aria-expanded", !collapse);
+    for (const tr of this.tbody.querySelectorAll(`tr[data-id][data-day="${day}"]`)) tr.hidden = collapse;
+  }
+
+  static COLS = 9;
+  // Alerts are for anything not yet released: upcoming events, and data releases
+  // past their time whose actual hasn't arrived. Past speeches/holidays never "release".
+  static canAlert(e, now) { return e.actual == null && (e.ts > now || (e.expectsValue && !e.holiday)); }
+  static IMPACT_SHORT = { high: "High", medium: "Med", low: "Low" };
+
+  // events: already filtered; emptyHtml shown when there are none.
+  render(events, { zone, now, emptyHtml }) {
+    this.zone = zone;
+    this.rows.clear();
+    this.todayKey = Time.dayKey(new Date(now), zone);
+    if (!events.length) {
+      this.tbody.innerHTML = `<tr class="empty-row"><td colspan="${EventsTable.COLS}">${emptyHtml}</td></tr>`;
+      return;
+    }
+    // Holidays are date-only (Finnhub marks them 00:00 UTC), so they stay on their
+    // own calendar date and lead their day. Everything else is grouped by its date
+    // in the selected zone, which can move it to the previous or next day.
+    const keyed = events.map(e => ({ e, day: e.holiday ? e.time.slice(0, 10) : Time.dayKey(e.d, zone) }));
+    keyed.sort((a, b) => (a.day < b.day ? -1 : a.day > b.day ? 1 : 0) || (b.e.holiday - a.e.holiday) || (a.e.ts - b.e.ts));
+
+    const perDay = new Map();
+    for (const { day } of keyed) perDay.set(day, (perDay.get(day) || 0) + 1);
+    let out = "", lastDay = "", n = 0; // n: row number within the day, for striping
+    for (const { e, day } of keyed) {
+      const folded = this.collapsed.has(day);
+      if (day !== lastDay) {
+        const rel = day === this.todayKey ? ` <span class="day-tag">Today</span>` : "";
+        const c = perDay.get(day);
+        out += `<tr class="day" data-day="${day}"><th colspan="${EventsTable.COLS}" scope="colgroup"><button type="button" class="day-toggle" aria-expanded="${!folded}" title="Fold or unfold this day">${Icons.arrow}<span>${Time.dayLabel(day)}</span>${rel}<span class="day-n">${c} event${c === 1 ? "" : "s"}</span></button></th></tr>`;
+        lastDay = day;
+        n = 0;
+      }
+      out += this.rowHtml(e, now, n++ % 2 === 1, day, folded);
+    }
+    this.tbody.innerHTML = out;
+    const byId = new Map(events.map(e => [e.id, e]));
+    for (const tr of this.tbody.querySelectorAll("tr[data-id]")) {
+      const e = byId.get(tr.dataset.id);
+      this.rows.set(e.id, { tr, e, statusKey: Events.status(e, now).label });
+    }
+  }
+
+  rowHtml(e, now, alt = false, day = "", folded = false) {
+    const st = Events.status(e, now);
+    const impactName = e.impact[0].toUpperCase() + e.impact.slice(1);
+    return `<tr${alt ? ` class="alt"` : ""} data-id="${esc(e.id)}" data-day="${day}"${folded ? " hidden" : ""} data-status="${st.kind}" data-alert="${this.opts.alerts.stateOf(e.id)}">
+      <td class="c-time">${e.holiday ? `<span class="allday">All day</span>` : Time.time(e.d, this.zone)}</td>
+      <td class="c-ctry" title="${esc(e.name)}">${Countries.flag(e.country)}<span class="cname">${esc(e.name)}</span></td>
+      <td class="c-imp"><span class="imp imp-${e.impact}" title="${impactName} impact" role="img" aria-label="${impactName} impact">${"<i></i>".repeat(3)}<span class="imp-txt" aria-hidden="true">${EventsTable.IMPACT_SHORT[e.impact]}</span></span></td>
+      <td class="c-ev"><span class="ev-name${e.holiday ? " hol" : ""}" title="${esc(e.event)} · ${esc(e.type)}">${esc(e.event)}</span></td>
+      <td class="num c-act${signClass(e.actual)}">${fmtVal(e.actual, e.unit)}</td>
+      <td class="num c-fc">${fmtVal(e.estimate, e.unit)}</td>
+      <td class="num c-prev${signClass(e.prev)}">${fmtVal(e.prev, e.unit)}</td>
+      <td class="c-status"><span class="st st-${st.kind}" title="${esc(st.title)}">${esc(st.label)}</span></td>
+      <td class="c-alert">${this.bellHtml(e, now)}</td>
+    </tr>`;
+  }
+
+  bellHtml(e, now) {
+    const a = this.opts.alerts, state = a.stateOf(e.id);
+    const ev = `${e.name} ${e.event}`;
+    let icon = Icons.bell, label, pressed = "false", disabled = "";
+    switch (state) {
+      case "armed": {
+        icon = Icons.bellFilled; pressed = "true";
+        const at = a.fireTime(e.id);
+        label = (a.info(e.id) || {}).awaitRelease ? `Alert on for ${ev}, goes off when it's released. Click to turn off`
+          : `Alert on for ${ev}${at > now ? `, goes off ${Time.countdown(at - now).toLowerCase()}` : ""}. Click to turn off`;
+        break;
+      }
+      case "triggered":
+        icon = Icons.bellRing; pressed = "true";
+        label = `Alert for ${ev} needs acknowledgment. Click to acknowledge`;
+        break;
+      case "acknowledged":
+        label = `Alert for ${ev} acknowledged. Click to clear it`;
+        break;
+      default:
+        if (!EventsTable.canAlert(e, now)) {
+          label = e.actual != null ? `${ev} is already released` : `${ev} has already happened, so no alert can be set`;
+          disabled = " disabled";
+        } else label = `Set an alert for ${ev}`;
+    }
+    return `<button type="button" class="bell bell-${state}" aria-pressed="${pressed}" aria-label="${esc(label)}" title="${esc(label)}"${disabled}>${icon}${state === "acknowledged" ? `<span class="bell-ack">${Icons.check}</span>` : ""}</button>`;
+  }
+
+  // Refresh statuses/countdowns. Returns true when the day changed (caller re-renders).
+  tick(now) {
+    if (this.rows.size && Time.dayKey(new Date(now), this.zone) !== this.todayKey) return true;
+    for (const r of this.rows.values()) {
+      const st = Events.status(r.e, now);
+      if (st.label === r.statusKey) continue;
+      r.statusKey = st.label;
+      r.tr.dataset.status = st.kind;
+      const cell = r.tr.querySelector(".c-status");
+      cell.innerHTML = `<span class="st st-${st.kind}" title="${esc(st.title)}">${esc(st.label)}</span>`;
+      // Arming becomes impossible once the event passes.
+      if (r.tr.dataset.alert === "none") r.tr.querySelector(".c-alert").innerHTML = this.bellHtml(r.e, now);
+    }
+    return false;
+  }
+
+  // Re-draw bell cells (all, or just the given ids). Keeps focus on a redrawn bell.
+  refreshAlerts(ids, now) {
+    const list = ids ? ids.map(id => this.rows.get(id)).filter(Boolean) : [...this.rows.values()];
+    for (const r of list) {
+      const hadFocus = r.tr.contains(document.activeElement) && document.activeElement.classList.contains("bell");
+      r.tr.dataset.alert = this.opts.alerts.stateOf(r.e.id);
+      r.tr.querySelector(".c-alert").innerHTML = this.bellHtml(r.e, now);
+      if (hadFocus) r.tr.querySelector(".bell").focus();
+    }
+  }
+
+  rowFor(id) { const r = this.rows.get(id); return r ? r.tr : null; }
+}
+
+// Green for positive, red for negative (Actual and Previous).
+const signClass = v => (v == null || !Number(v) ? "" : Number(v) > 0 ? " pos" : " neg");
+
+function fmtVal(v, unit) {
+  if (v == null) return '<span class="dash" aria-label="Not available">—</span>';
+  const n = Number(v).toLocaleString(undefined, { maximumFractionDigits: 3 });
+  if (!unit) return n;
+  if (unit === "%") return n + "%";
+  if (unit.length === 1 && /[$€£¥]/.test(unit)) return unit + n;
+  return n + " " + unit;
+}
