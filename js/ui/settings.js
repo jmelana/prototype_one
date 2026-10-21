@@ -5,6 +5,7 @@
 //     countries: () => [code],             every country the user can pick
 //     valueColors: { get() -> { mode: "bluepink" | "greenred" | "custom", pos?, neg? }, set(value), current() -> { pos, neg } },
 //     timezone: { options(selectedId) -> <option> HTML, get(), set(id) },
+//     theme: { get() -> "dark" | "light" | "system", set(value) },
 //     onClose(),
 //   })
 const AlertsDemoHint = "Sets off every event with a filled bell so you can see the alarm. Your real alerts still go off at their scheduled time.";
@@ -24,7 +25,8 @@ class SettingsPanel {
         <button type="button" class="icon-btn" data-act="close" aria-label="Close settings" title="Close">${Icons.x}</button>
       </div>
       <div class="tabs" role="tablist" aria-label="Settings sections">
-        ${tabs.map(([k, t], i) => `<button type="button" role="tab" id="tab-${k}" data-tab="${k}" aria-controls="pane-${k}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}">${t}</button>`).join("")}
+        ${tabs.map(([k, t], i) => `<button type="button" role="tab" id="tab-${k}" data-tab="${k}" aria-controls="pane-${k}" aria-selected="${i === 0}" tabindex="${i === 0 ? 0 : -1}" aria-label="${t}">${
+          k === "groups" ? `<span class="t-long">${t}</span><span class="t-short">Groups</span>` : t}</button>`).join("")}
       </div>
       <div class="set-body">
         ${tabs.map(([k], i) => `<section role="tabpanel" id="pane-${k}" aria-labelledby="tab-${k}" ${i ? "hidden" : ""}></section>`).join("")}
@@ -316,6 +318,7 @@ class SettingsPanel {
     const sel = p.querySelector("[name=defaultZone]"), cur = this.opts.timezone.get();
     sel.innerHTML = this.opts.timezone.options(cur);
     sel.value = cur;
+    p.querySelector(`[name=theme][value="${this.opts.theme.get()}"]`).checked = true;
     const vc = this.opts.valueColors.get(), now = this.opts.valueColors.current();
     p.querySelector(`[name=vc][value="${vc.mode}"]`).checked = true;
     p.querySelector("[name=posColor]").value = now.pos;
@@ -334,6 +337,13 @@ class SettingsPanel {
   initDisplay() {
     const p = this.panes.display;
     p.innerHTML = `
+      <h3 class="set-h" id="themeLbl">Appearance</h3>
+      <div class="theme-options" role="radiogroup" aria-labelledby="themeLbl">
+        <label class="check"><input type="radio" name="theme" value="dark"> Dark</label>
+        <label class="check"><input type="radio" name="theme" value="light"> Light</label>
+        <label class="check"><input type="radio" name="theme" value="system"> Match my computer</label>
+      </div>
+      <p class="set-desc">Dark is the default. “Match my computer” follows your system’s light or dark setting.</p>
       <h3 class="set-h">Time zone</h3>
       <label class="field"><span class="field-label">Default time zone</span>
         <select name="defaultZone" class="set-select"></select></label>
@@ -353,6 +363,10 @@ class SettingsPanel {
         <span>Preview</span><span class="vc-pos">3.7%</span><span class="vc-neg">-1.4%</span><span class="vc-pos">250</span><span class="vc-neg">-0.448</span>
       </div>`;
     p.querySelector("[name=defaultZone]").addEventListener("change", e => this.opts.timezone.set(e.target.value));
+    for (const r of p.querySelectorAll("[name=theme]")) r.addEventListener("change", e => {
+      this.opts.theme.set(e.target.value);
+      this.renderDisplay(); // value-color presets differ by theme, so refresh the swatches
+    });
     const vc = this.opts.valueColors;
     p.querySelector(".vc-options").addEventListener("change", e => {
       // Choosing Custom starts from the colors currently shown.
