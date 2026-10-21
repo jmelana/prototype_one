@@ -28,7 +28,14 @@ function startApp({ apiKey, onLogout }) {
     else { root.style.removeProperty("--pos"); root.style.removeProperty("--neg"); }
   }
   applyValueColors();
-  const savePrefs = () => Store.set("prefs", { defaultZone, valueColors });
+  // Theme (Settings → Display): "dark" (default), "light", or "system" to match the computer.
+  let theme = ["dark", "light", "system"].includes(prefs.theme) ? prefs.theme : "dark";
+  function applyTheme() {
+    if (theme === "system") delete document.documentElement.dataset.theme;
+    else document.documentElement.dataset.theme = theme;
+  }
+  applyTheme();
+  const savePrefs = () => Store.set("prefs", { defaultZone, valueColors, theme });
   // Countries shown when the app opens and after "Clear all".
   const DEFAULT_GROUPS = ["g20"];
   state.groups = new Set(DEFAULT_GROUPS);
@@ -89,7 +96,10 @@ function startApp({ apiKey, onLogout }) {
     t.title = day === "today" ? "Showing today only. Click to show the selected dates" : "Show today only";
     // Only Today locks the range. With another day picked, the fields stay usable and
     // changing them goes back to showing the whole range (see setPicked).
-    for (const id of ["dateFrom", "dateTo", "prevWeek", "nextWeek"]) $(id).disabled = day === "today";
+    for (const id of ["dateFrom", "dateTo", "prevWeek", "nextWeek", "rangeBtn"]) $(id).disabled = day === "today";
+    // Phones show the range as one compact button ("Oct 19 – 25") that opens the date fields.
+    const [fm, fd] = Time.shortDay(picked.from).split(" "), [tm, td] = Time.shortDay(picked.to).split(" ");
+    $("rangeText").textContent = picked.from === picked.to ? `${fm} ${fd}` : fm === tm ? `${fm} ${fd} – ${td}` : `${fm} ${fd} – ${tm} ${td}`;
     // Reset appears only away from the current week; its space stays reserved.
     $("thisWeek").classList.toggle("is-away", !isDefaultRange());
   }
@@ -287,6 +297,23 @@ function startApp({ apiKey, onLogout }) {
   q.addEventListener("input", () => { state.q = q.value; qClear.hidden = !q.value; render(); });
   q.addEventListener("keydown", e => { if (e.key === "Escape" && q.value) { e.preventDefault(); setQuery(""); } });
   qClear.addEventListener("click", () => { setQuery(""); q.focus(); });
+  // Phones: the date fields open from the compact range button.
+  $("rangeBtn").addEventListener("click", () => {
+    const open = !$("topbar").classList.contains("show-dates");
+    $("topbar").classList.toggle("show-dates", open);
+    $("rangeBtn").setAttribute("aria-expanded", open);
+  });
+  // Phones: search hides behind an icon to save a row of the top bar.
+  $("searchToggle").addEventListener("click", () => {
+    const open = !$("topbar").classList.contains("show-search");
+    $("topbar").classList.toggle("show-search", open);
+    $("searchToggle").setAttribute("aria-expanded", open);
+    if (open) q.focus();
+  });
+  // Phones: date headers stick just below the sticky top bar, so track its height.
+  if ("ResizeObserver" in window) {
+    new ResizeObserver(() => document.documentElement.style.setProperty("--topbar-h", $("topbar").getBoundingClientRect().height + "px")).observe($("topbar"));
+  }
 
   // ---- Settings ----------------------------------------------------------------
   const settings = new SettingsPanel($("settings"), {
@@ -300,6 +327,7 @@ function startApp({ apiKey, onLogout }) {
         return { pos: cs.getPropertyValue("--pos").trim(), neg: cs.getPropertyValue("--neg").trim() };
       },
     },
+    theme: { get: () => theme, set: t => { theme = t; applyTheme(); savePrefs(); } },
     timezone: {
       options: zoneOptionsHtml,
       get: () => defaultZone,
@@ -397,6 +425,7 @@ function startApp({ apiKey, onLogout }) {
   function render() {
     typeDD.render(); impactDD.render();
     renderCountryBtn();
+    $("searchToggle").classList.toggle("has-query", !!state.q.trim());
     renderDates();
     renderDayTabs();
     $("holidays").value = state.holidays;
