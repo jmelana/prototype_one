@@ -19,7 +19,7 @@ const Alerts = (() => {
   const MAX_LEAD = { minutes: 60 * 24 * 30, hours: 24 * 30, days: 30 };
   // Settings are an object so more options can be added without migrations;
   // unknown or missing keys fall back to these defaults.
-  const DEFAULT_SETTINGS = { lead: { value: 30, unit: "minutes" } };
+  const DEFAULT_SETTINGS = { lead: { value: 10, unit: "minutes" } };
 
   function validateLead(value, unit) {
     if (!(unit in UNITS)) return { error: "Choose minutes, hours or days." };
