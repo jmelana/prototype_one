@@ -11,6 +11,14 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flag-icons@7.5.0/css/flag-icons.min.css">
 <link rel="stylesheet" href="css/app.css">
+<script>
+  // Theme before first paint (login page included): Dark unless the person chose Light
+  // or "Match my computer" in Settings → Display. No data-theme = follow the system.
+  try {
+    const t = (JSON.parse(localStorage.getItem("econocal:prefs") || "{}") || {}).theme || "dark";
+    if (t !== "system") document.documentElement.dataset.theme = t === "light" ? "light" : "dark";
+  } catch { document.documentElement.dataset.theme = "dark"; }
+</script>
 </head>
 <body>
 <main id="login" class="login" hidden>
@@ -35,17 +43,22 @@
     <button type="button" class="linkbtn" id="logout">Log out</button>
   </header>
 
+  <!-- .topbar and .tb-filters only matter on phones (sticky bar, swipeable filters);
+       on desktop they're display: contents, so the layout is unchanged -->
+  <div class="topbar" id="topbar">
   <section class="toolbar" aria-label="Filters">
     <div class="tb-left">
       <div class="tb-dates" id="dates" role="group" aria-label="Date range">
         <button type="button" id="todayBtn" class="tb-btn" aria-pressed="false">Today</button>
         <button type="button" id="prevWeek" class="tb-arrow" aria-label="Previous week" title="Previous week"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+        <button type="button" id="rangeBtn" class="tb-btn tb-rangebtn" aria-expanded="false" aria-label="Change dates"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span id="rangeText"></span></button>
         <label class="tb-btn tb-datebox" id="dateFromBox"><input type="date" id="dateFrom" class="tb-date" aria-label="From date" required><span class="tb-calbtn"><svg class="ico tb-cal" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span></label>
         <span class="tb-dash" aria-hidden="true">–</span>
         <label class="tb-btn tb-datebox" id="dateToBox"><input type="date" id="dateTo" class="tb-date" aria-label="To date" required><span class="tb-calbtn"><svg class="ico tb-cal" viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg></span></label>
         <button type="button" id="nextWeek" class="tb-arrow" aria-label="Next week" title="Next week"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
         <button type="button" id="thisWeek" class="tb-arrow tb-reset" aria-label="Back to this week" title="Back to this week"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
       </div>
+      <div class="tb-filters">
       <label class="tb-btn tb-pick" id="holidaysPick">
         <svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
         <span class="tb-label">Holidays</span>
@@ -57,8 +70,10 @@
       </label>
       <div id="ddImpact"></div>
       <div id="ddTypes"></div>
+      </div>
     </div>
     <div class="tb-right">
+      <button type="button" id="searchToggle" class="tb-btn icon-only tb-searchbtn" aria-label="Search events" aria-expanded="false" aria-controls="q"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></button>
       <div class="search">
         <svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
         <input type="search" id="q" placeholder="Search events" aria-label="Search events by name" autocomplete="off">
@@ -74,6 +89,7 @@
   </section>
 
   <div class="daytabs" id="daytabs" role="group" aria-label="Day" hidden></div>
+  </div>
 
   <div class="statusbar">
     <div class="count" id="count" aria-live="polite"></div>
