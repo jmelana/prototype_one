@@ -1,6 +1,7 @@
 /* Economic calendar: toolbar over a single events table.
-   Dark by default (greys and steel blue from the trading platform); light only
-   when the system is set to light mode. --accent is a fill (buttons, selected
+   Dark by default (greys and steel blue from the trading platform). Settings → Display
+   can pick Light, or "Match my computer", which removes data-theme so the
+   prefers-color-scheme rules below decide. --accent is a fill (buttons, selected
    states); --accent-text is the readable version for links, icons and outlines. */
 :root {
   --bg: #1e1e1e; --panel: #262626; --panel-2: #323232; --control: #323232; --control-hover: #3c3c3c;
@@ -119,6 +120,10 @@ h1 { font-size: 20px; font-weight: 600; letter-spacing: -.01em; margin: 0; }
 .flag-world .ico { width: 16px; height: 16px; }
 
 /* ---- Toolbar ------------------------------------------------------------- */
+/* Phone-only wrappers and search button; on desktop they don't affect layout */
+.topbar, .tb-filters { display: contents; }
+.tb-btn.tb-searchbtn, .tb-btn.tb-rangebtn { display: none; } /* two classes: beats .tb-btn's display */
+.t-short { display: none; }
 .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
 .tb-left, .tb-right { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
 .tb-right { margin-left: auto; }
@@ -248,8 +253,8 @@ h1 { font-size: 20px; font-weight: 600; letter-spacing: -.01em; margin: 0; }
   background-repeat: no-repeat; background-position: right 2px center; }
 .tz-pick select:hover { color: var(--accent-text); }
 .tz-pick option, .tz-pick optgroup, .set-select option, .set-select optgroup { background: var(--panel); color: var(--fg); font-weight: 400; }
-.vc-options { display: flex; flex-wrap: wrap; gap: 4px 20px; margin-bottom: 8px; }
-.vc-options input { accent-color: var(--accent); margin: 0; }
+.vc-options, .theme-options { display: flex; flex-wrap: wrap; gap: 4px 20px; margin-bottom: 8px; }
+.vc-options input, .theme-options input { accent-color: var(--accent); margin: 0; }
 .vc-custom { display: flex; flex-wrap: wrap; gap: 10px 20px; margin-bottom: 10px; }
 .vc-color { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer; }
 .vc-color input { width: 32px; height: 24px; padding: 0; border: 1px solid var(--line-strong); border-radius: 4px; background: none; cursor: pointer; }
@@ -609,63 +614,157 @@ tbody tr[data-alert="triggered"] td, tbody tr[data-alert="triggered"]:hover td {
   .tz-note { margin-left: 0; width: 100%; }
 }
 @media (max-width: 560px) {
-  .tb-left { width: 100%; }
-  /* The two date fields get the whole first row; Today ‹ › start the next row */
-  .tb-dates { display: contents; }
-  .tb-dates::after { content: ""; flex-basis: 100%; } /* line break after the date fields */
-  .tb-datebox { flex: 1 1 110px; min-width: 0; }
-  .tb-date { flex: 1; width: 100%; min-width: 0; }
+  /* ==== Phone design ======================================================
+     Not a JavaFX mock-up: a touch-first web layout. Flat rounded controls,
+     a sticky top bar, swipeable filters, bottom sheets and two-line rows. */
+  body { font-size: 15px; }
+  .wrap { padding-top: 12px; }
+  .top { margin-bottom: 8px; align-items: center; }
+  h1 { font-size: 18px; }
+
+  /* Sticky top bar: dates, filters and day tabs stay in reach while scrolling */
+  .topbar { display: block; position: sticky; top: 0; z-index: 20; margin: 0 -16px; padding: 8px 16px; padding-top: max(8px, env(safe-area-inset-top, 0px));
+    background: var(--bg); border-bottom: 1px solid var(--line); }
+  .toolbar, .toolbar:hover { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 6px; padding: 0; background: none; border: 0; border-radius: 0; }
+  .tb-left, .tb-right, .tb-dates { display: contents; }
+  /* Row 1: ‹ [Oct 19 – 25] › ↺ … search, settings */
+  #prevWeek, .tb-rangebtn, #nextWeek, #thisWeek, .tb-searchbtn, #gear { order: 1; }
+  .tb-btn.tb-rangebtn { display: inline-flex; flex: 1 1 auto; min-width: 0; justify-content: center; font-weight: 600; }
+  .tb-rangebtn[aria-expanded="true"] { background: var(--control-hover); }
+  .tb-rangebtn span { overflow: hidden; text-overflow: ellipsis; }
+  .tb-btn.tb-searchbtn { display: inline-flex; }
+  .tb-searchbtn.has-query::after { content: ""; position: absolute; top: 7px; right: 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent-text); }
+  .tb-searchbtn[aria-expanded="true"] { background: var(--control-hover); }
+  .tb-reset:not(.is-away) { display: none; }
+  .tb-dates::after { content: ""; order: 2; flex-basis: 100%; }
+  /* Row 1b (opened from the range button): the two date fields, full width */
+  #dateFromBox, .tb-dash, #dateToBox { order: 3; display: none; }
+  .tb-left::before { content: ""; order: 4; flex-basis: 100%; display: none; }
+  .topbar.show-dates #dateFromBox, .topbar.show-dates #dateToBox { display: flex; }
+  .topbar.show-dates .tb-dash, .topbar.show-dates .tb-left::before { display: block; }
+  /* Row 2: Today · countries · swipeable filters */
+  #todayBtn, .tb-right > .dd { order: 5; }
+  /* No fade mask here: a mask would also clip the bottom-sheet menus that open from these chips */
+  .tb-filters { order: 6; display: flex; gap: 6px; flex: 1 1 0; min-width: 0; overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+  .tb-filters::-webkit-scrollbar { display: none; }
+  .tb-filters > * { flex: none; }
+  #holidaysPick, #ddTypes { margin: 0; }
+  .tb-filters .tb-btn > .ico:not(.arrow) { display: none; } /* labels say enough; fits more chips */
+  /* Row 3 (only while searching): full-width search */
+  .search { order: 7; flex: 1 1 100%; display: none; }
+  .topbar.show-search .search, .search:has(input:not(:placeholder-shown)) { display: flex; }
+  .search input { width: 100%; }
+
+  /* Flat, rounded, touch-sized controls (replacing the desktop JavaFX look) */
+  .tb-btn, .tb-btn:hover, .tb-btn:active, .tb-pick:hover, .btn, .btn:hover, .chip, .cp-pick, .cp-pick:hover {
+    border-color: transparent; background: var(--control); box-shadow: none; }
+  .tb-btn { height: 40px; border-radius: 10px; padding: 0 12px; }
+  .tb-btn[aria-expanded="true"], .icon-only[aria-expanded="true"] { background: var(--control-hover); box-shadow: none; }
+  .icon-only { width: 40px; padding: 0; }
+  #countryBtn.has-group { width: auto; padding: 0 8px; }
+  .tb-badge { top: -4px; right: -4px; }
+  .btn { height: 44px; border-radius: 10px; font-size: 15px; }
+  .btn.sm { height: 36px; }
+  .btn.primary, .btn.primary:hover, .tb-dates #todayBtn[aria-pressed="true"], .cp-pick[aria-pressed="true"] {
+    background: var(--accent); border-color: transparent; box-shadow: none; color: var(--accent-fg); }
+  .tb-arrow { width: 30px; height: 40px; }
+  .tb-arrow .ico { width: 20px; height: 20px; }
+  .tb-reset .ico { width: 17px; height: 17px; }
+  .tb-datebox, .tb-datebox:hover { flex: 1 1 0; min-width: 0; height: 40px; padding: 0 10px; border-color: transparent; border-radius: 10px; background: var(--control); box-shadow: none; }
+  .tb-date { flex: 1; width: 100%; min-width: 0; height: 38px; font-size: 14px; }
   .tb-calbtn { display: none; }
-  .tb-datebox { padding-right: 8px; }
-  .tb-datebox, .tb-dash { margin-bottom: -6px; } /* cancel the empty break line's extra gap */
-  #todayBtn, .tb-arrow { order: 1; }
-  .tb-left > :not(.tb-dates) { order: 2; }
-  .daytab { min-width: 72px; padding: 6px 8px; }
   .tb-date::-webkit-calendar-picker-indicator { display: none; } /* tapping the date opens the picker */
-  .cp-picks, .cp-grid { grid-template-columns: minmax(0, 1fr); }
-  .modal { width: 100vw; max-width: 100vw; max-height: 100dvh; height: 100dvh; border-radius: 0; margin: 0; }
-  .modal.alarm-modal { width: calc(100vw - 24px); height: fit-content; max-height: calc(100dvh - 24px); border-radius: 10px; margin: auto; }
-  .cp-pick, .cp-country { min-height: 44px; }
-  .dd-panel { position: fixed; left: 8px !important; right: 8px; top: auto; bottom: 8px; min-width: 0; }
-  .dd-list { max-height: 55vh; }
-  .opt { padding-block: 10px; }
-  .tablebox { max-height: none; overflow: hidden; }
-  /* Table: each event becomes two lines so the name is always readable, no sideways scroll.
+  .search input, .field input[type=text], .field input[type=search], .field input[type=password], .lead-row input, .lead-row select, .set-select, .modal-search input {
+    height: 44px; border-radius: 10px; font-size: 16px; box-shadow: none; } /* 16px stops iOS zooming in */
+  .search input { padding-left: 38px; }
+  .search > .ico { left: 13px; }
+  input[type=checkbox], input[type=radio] { width: 20px; height: 20px; }
+  input[type=checkbox] { border-radius: 5px; }
+  input[type=checkbox]:checked { background: var(--accent); border-color: var(--accent); }
+  input[type=checkbox]:checked::after { background: #fff; width: 14px; height: 14px; }
+
+  /* Day tabs: pills */
+  .daytabs { margin-top: 8px; gap: 6px; }
+  .daytab, .daytab:first-child, .daytab:last-child, .daytab:hover { min-width: 72px; padding: 6px 10px; border: 0; border-radius: 10px; background: var(--control); box-shadow: none; }
+  .daytab[aria-pressed="true"], .daytab[aria-pressed="true"]:hover { background: var(--accent); box-shadow: none; }
+
+  /* Status bar and chips */
+  .statusbar { margin: 10px 0; }
+  .tz-note { display: flex; flex-direction: column; gap: 2px; }
+  .source:not(:empty)::after { display: none; }
+  .chip { height: 30px; border-radius: 999px; padding-left: 12px; }
+
+  /* Table: each event is two lines, so names are always readable with no sideways scroll.
      Line 1: time · flag · event · status · bell.  Line 2: impact · Act · Fcst · Prev.
      Rows are flex boxes; `order` plus a full-width ::after break makes the two lines. */
+  .tablebox { max-height: none; overflow: clip; border-radius: 12px; } /* clip, not hidden, so sticky day headers work */
   table, tbody { display: block; min-width: 0; }
   thead, colgroup { display: none; }
   tr.day, tr.day th, .empty-row, .empty-row td { display: block; }
-  tbody tr[data-id] { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; padding: 6px 8px; background: var(--row); }
+  /* Each day's header sticks just below the top bar while its events scroll past */
+  tr.day { position: sticky; top: var(--topbar-h, 0px); z-index: 5; }
+  tr.day th { padding: 9px 12px; font-size: 13px; }
+  tbody tr[data-id] { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; padding: 8px 12px; background: var(--row); }
   tbody tr.alt[data-id] { background: var(--row-alt); }
   tbody tr[data-alert="triggered"] { background: var(--alert-bg) !important; box-shadow: inset 3px 0 0 var(--alert-edge); }
   /* Cell backgrounds come from the row here (several td rules would otherwise paint over it) */
   tbody tr[data-id] td { padding: 0; background: none !important; box-shadow: none !important; }
   tbody tr[data-id]::after { content: ""; order: 6; flex-basis: 100%; height: 0; }
-  .c-time { order: 1; width: 44px; }
+  .c-time { order: 1; width: 44px; font-size: 14px; }
   .c-ctry { order: 2; flex: none; }
-  .c-ctry .flag { margin-right: 0; }
+  .c-ctry .flag { margin-right: 0; width: 18px; height: 18px; }
   .cname { display: none; }
   .c-ev { order: 3; flex: 1 1 0; min-width: 0; }
-  .ev-name { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .ev-name { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 14px; }
   .c-status { order: 4; }
-  .c-alert { order: 5; }
+  .c-alert { order: 5; margin: -6px -8px -6px 0; }
+  .bell { width: 40px; height: 36px; }
   .c-imp { order: 7; width: 44px; }
   .imp-txt { display: none; } /* bars alone show the level here; the label is still announced */
-  td.num { order: 8; flex: 1 1 0; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; }
+  td.num { order: 8; flex: 1 1 0; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
   td.c-fc { order: 9; }
   td.c-prev { order: 10; }
   td.num::before { margin-right: 4px; font-size: 11px; font-weight: 500; color: var(--faint); }
   td.c-act::before { content: "Act"; }
   td.c-fc::before { content: "Fcst"; }
   td.c-prev::before { content: "Prev"; }
-  /* Status line: live/updated on one line, time zone on the next */
-  .tz-note { display: flex; flex-direction: column; gap: 2px; }
-  .source:not(:empty)::after { display: none; }
-  /* Dialog button bars: buttons together on the right, on their own line if needed */
+
+  /* Menus (Impact, Categories) as bottom sheets with a grab handle */
+  .dd-panel { position: fixed; left: 0 !important; right: 0; top: auto; bottom: 0; min-width: 0; max-width: none; max-height: 78dvh; display: flex; flex-direction: column;
+    padding: 6px 0 max(12px, env(safe-area-inset-bottom, 0px)); border: 0; border-radius: 16px 16px 0 0; box-shadow: 0 0 0 100vmax rgba(0, 0, 0, .55); }
+  .dd-panel[hidden] { display: none; }
+  .dd-panel::before { content: ""; flex: none; width: 36px; height: 4px; margin: 4px auto 8px; border-radius: 2px; background: var(--line-strong); }
+  .dd-list { flex: 1; max-height: none; }
+  .menu-item, .opt { min-height: 46px; padding: 10px 20px; font-size: 15px; gap: 12px; }
+  .menu-sep { margin: 6px 0; }
+
+  /* Settings and country picker: full-screen sheets */
+  .modal { width: 100vw; max-width: 100vw; height: 100dvh; max-height: 100dvh; margin: 0; border: 0; border-radius: 0; }
+  .modal-head { height: auto; min-height: 52px; padding: max(6px, env(safe-area-inset-top, 0px)) 6px 6px 16px; }
+  .modal-head h2, .win-title { font-size: 17px; }
+  .modal-head .icon-btn { width: 40px; height: 40px; border-radius: 10px; }
+  .modal-foot { gap: 8px; padding: 10px 16px max(12px, env(safe-area-inset-bottom, 0px)); }
   .modal-foot .spacer { flex-basis: 100%; height: 0; }
-  .modal-foot .spacer + .btn { margin-left: auto; }
-  .modal-foot .cp-summary + .linkbtn + .spacer { flex-basis: 100%; }
+  .modal-foot .btn { flex: 1; min-width: 0; }
+  .tabs { gap: 6px; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+  .tabs [role=tab], .tabs [role=tab][aria-selected="true"] { flex: 1; min-width: 0; margin: 0; padding: 9px 6px; border: 0; border-radius: 10px; background: var(--control);
+    font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .tabs [role=tab][aria-selected="true"] { background: var(--accent); color: var(--accent-fg); }
+  .set-body { padding: 4px 16px 24px; }
+  .modal-search { padding: 10px 16px; }
+  .modal-search > .ico { left: 28px; }
+  .modal-search input { padding-left: 38px; }
+  .cp-picks, .cp-grid { grid-template-columns: minmax(0, 1fr); }
+  .cp-picks { gap: 6px; }
+  .cp-pick { min-height: 48px; border-radius: 10px; }
+  .cp-country { min-height: 48px; padding: 4px 10px; }
+  /* Alarm: a centred card, not full screen */
+  .modal.alarm-modal { width: calc(100vw - 24px); height: fit-content; max-height: calc(100dvh - 24px); margin: auto; border-radius: 16px; overflow: hidden; }
+
+  /* Login */
+  .login-card { padding: 24px 20px; border-radius: 16px; }
+  .login-btn { height: 46px; }
 }
-@media (max-width: 340px) { .tb-datebox { padding: 0 4px; } .tb-date { font-size: 12px; } }
+@media (max-width: 380px) { .t-long { display: none; } .t-short { display: inline; } }
+@media (max-width: 340px) { .tb-datebox, .tb-datebox:hover { padding: 0 6px; } .tb-date { font-size: 13px; } .tb-arrow { width: 24px; } }
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
