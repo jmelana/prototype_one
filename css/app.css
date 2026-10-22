@@ -5,7 +5,7 @@
    states); --accent-text is the readable version for links, icons and outlines. */
 :root {
   --bg: #1e1e1e; --panel: #262626; --panel-2: #323232; --control: #323232; --control-hover: #3c3c3c;
-  --head: #282828; --row: #1e1e1e; --row-alt: #232323; --row-hover: #2c2c2c; --day: #2b2b2b;
+  --head: #282828; --row: #1e1e1e; --row-alt: #232323; --row-hover: #303030; --day: #2b2b2b;
   --fg: #ffffff; --muted: #a6a6a6; --faint: #767676; --line: #303030; --line-strong: #3c3c3c;
   --accent: #28557d; --accent-fg: #ffffff; --accent-text: #8fbce6; --accent-soft: #233547;
   --high: #ff7b6b; --med: #e8b04a; --low: #8a8a8a;
@@ -546,10 +546,13 @@ tr.day th { padding: 4px 8px; }
 .ev-name { display: block; white-space: nowrap; text-overflow: ellipsis; -webkit-line-clamp: unset; }
 .bell { width: 26px; height: 22px; border-radius: 3px; }
 .st { padding: 1px 6px; }
-/* No row hover in a TableView; triggered alerts keep their highlight */
-tbody tr[data-id]:hover td { background: var(--row); }
-tbody tr.alt[data-id]:hover td { background: var(--row-alt); }
-tbody tr[data-alert="triggered"] td, tbody tr[data-alert="triggered"]:hover td { background: var(--alert-bg); }
+/* Row hover, like a :hover rule on JavaFX .table-row-cell. Mouse only, so a tap on a
+   touch screen doesn't leave a row highlighted. Triggered alerts keep their amber. */
+@media (hover: hover) {
+  tbody tr[data-id]:hover td, tbody tr.alt[data-id]:hover td { background: var(--row-hover); }
+}
+tbody tr[data-alert="triggered"] td { background: var(--alert-bg); }
+tbody tr[data-alert="triggered"]:hover td { background: color-mix(in srgb, var(--alert-bg) 88%, var(--fg)); }
 
 /* Day headers fold like TreeTableView parent rows: disclosure triangle on the left */
 .day-toggle { display: flex; align-items: center; gap: 8px; width: 100%; padding: 0; border: 0; background: none; font: inherit; color: inherit; text-align: left; cursor: pointer; }
