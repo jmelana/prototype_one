@@ -40,7 +40,6 @@
   <header class="top">
     <h1>Economic Calendar</h1>
     <div class="top-acts">
-      <label class="sb-pick" id="countryPick" title="Countries"><select id="countryPreset" aria-label="Countries"></select></label>
       <label class="tz-pick" id="tzPick" title="Time zone for event times"><select id="tz" aria-label="Time zone"></select></label>
       <span class="top-sep" aria-hidden="true">|</span>
       <button type="button" id="gear" class="head-icon" aria-label="Settings: country groups and alerts" title="Settings" aria-expanded="false" aria-controls="settings">
@@ -83,6 +82,7 @@
     <div class="count sr" id="count" aria-live="polite"></div><!-- hidden; still announces result counts to screen readers -->
     <!-- Filters as plain text dropdowns, then Reset filters; the Refresh link at the far right -->
     <div class="sb-filters">
+      <label class="sb-pick" id="countryPick" title="Countries"><span class="sb-label">Countries</span><select id="countryPreset" aria-label="Countries"></select></label>
       <div id="ddImpact"></div>
       <div id="ddTypes"></div>
       <div id="ddStatus"></div>
