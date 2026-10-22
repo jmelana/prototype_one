@@ -12,6 +12,7 @@ const Filters = (() => {
       q: "",
       types: null,
       impacts: null,
+      statuses: null,         // release status: "upcoming" | "awaiting" | "released" | "past"
       holidays: "show",       // "hide" | "show" | "only"
       groups: new Set(),      // selected group ids (built-in or custom)
       countries: new Set(),   // individually selected country codes
@@ -41,6 +42,9 @@ const Filters = (() => {
     if (state.holidays === "hide" ? e.holiday : only && !e.holiday) return false;
     if (!only && skip !== "impacts" && state.impacts && !state.impacts.has(e.impact)) return false;
     if (!only && skip !== "types" && state.types && !state.types.has(e.type)) return false;
+    // Status changes with the clock (Upcoming → Awaiting → Released). Holidays aren't
+    // filtered by status; the Holiday entry in Categories shows or hides them.
+    if (skip !== "statuses" && state.statuses && !e.holiday && !state.statuses.has(Events.status(e, ctx.now).kind)) return false;
     if (skip !== "countries" && ctx.countries && !ctx.countries.has(e.country)) return false;
     if (ctx.q && !e.event.toLowerCase().includes(ctx.q)) return false;
     if (state.range) {
@@ -54,7 +58,7 @@ const Filters = (() => {
   const utcDay = e => e.time.slice(0, 10);
 
   function context(state, groups, dayOf = utcDay) {
-    return { countries: countrySet(state, groups), q: state.q.trim().toLowerCase(), dayOf };
+    return { countries: countrySet(state, groups), q: state.q.trim().toLowerCase(), dayOf, now: Date.now() };
   }
 
   function apply(events, state, groups, dayOf) {
@@ -62,10 +66,15 @@ const Filters = (() => {
     return events.filter(e => matches(e, state, ctx));
   }
 
+  // `key` is a field name, or a function of (event, now) for computed values like status.
   function countBy(events, state, groups, skip, key, dayOf) {
     const ctx = context(state, groups, dayOf);
     const m = new Map();
-    for (const e of events) if (matches(e, state, ctx, skip)) m.set(e[key], (m.get(e[key]) || 0) + 1);
+    for (const e of events) {
+      if (!matches(e, state, ctx, skip)) continue;
+      const k = typeof key === "function" ? key(e, ctx.now) : e[key];
+      m.set(k, (m.get(k) || 0) + 1);
+    }
     return m;
   }
 

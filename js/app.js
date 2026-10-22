@@ -169,12 +169,12 @@ function startApp({ apiKey, onLogout }) {
     // Touch screens: tapping the date opens the calendar instead of the keyboard.
     if (matchMedia("(pointer: coarse)").matches) { input.readOnly = true; input.addEventListener("click", open); }
   }
-  // The date fields and the Countries dropdown never highlight when clicked.
+  // The date fields and the Countries and time zone dropdowns never highlight when clicked.
   // Reached with Tab, they get a faint border (kbd-focus) so keyboard focus stays visible.
   let keyboardNav = false;
   document.addEventListener("keydown", e => { if (e.key === "Tab") keyboardNav = true; }, true);
   document.addEventListener("pointerdown", () => { keyboardNav = false; }, true);
-  for (const [control, box] of [["dateFrom", "dateFromBox"], ["dateTo", "dateToBox"], ["countryPreset", "countryPick"]]) {
+  for (const [control, box] of [["dateFrom", "dateFromBox"], ["dateTo", "dateToBox"], ["countryPreset", "countryPick"], ["tz", "tzPick"]]) {
     $(control).addEventListener("focus", () => $(box).classList.toggle("kbd-focus", keyboardNav));
     $(control).addEventListener("blur", () => $(box).classList.remove("kbd-focus"));
   }
@@ -195,6 +195,11 @@ function startApp({ apiKey, onLogout }) {
       value: v, label: v[0].toUpperCase() + v.slice(1), count: c.get(v) || 0,
       prefix: `<span class="imp imp-${v}" aria-hidden="true"><i></i><i></i><i></i></span>`,
     }));
+  }
+  const STATUSES = [["upcoming", "Upcoming"], ["awaiting", "Awaiting"], ["released", "Released"], ["past", "Past"]];
+  function statusOptions() {
+    const c = Filters.countBy(events, state, groups, "statuses", (e, now) => e.holiday ? null : Events.status(e, now).kind, dayOf);
+    return STATUSES.map(([v, label]) => ({ value: v, label, count: c.get(v) || 0 }));
   }
   // Countries in the data plus every group member, so any group can be picked.
   function allCountryCodes() {
@@ -217,6 +222,13 @@ function startApp({ apiKey, onLogout }) {
     onToggle: v => { state.impacts = Filters.toggle(state.impacts, v, Events.IMPACTS); render(); },
     onAll: () => { state.impacts = null; render(); },
     onClear: () => { state.impacts = new Set(); render(); },
+  });
+  const statusDD = new MultiSelect($("ddStatus"), {
+    label: "Status", icon: Icons.clock,
+    options: statusOptions, selected: () => state.statuses,
+    onToggle: v => { state.statuses = Filters.toggle(state.statuses, v, STATUSES.map(s => s[0])); render(); },
+    onAll: () => { state.statuses = null; render(); },
+    onClear: () => { state.statuses = new Set(); render(); },
   });
 
 
@@ -368,22 +380,23 @@ function startApp({ apiKey, onLogout }) {
   // ---- Reset filters ---------------------------------------------------------------
   // No chips: each dropdown already shows its value. A "Reset filters" link appears at
   // the start of the filter line whenever a filter differs from its default.
-  const filtersAreDefault = () => !state.q.trim() && !state.types && !state.impacts && state.holidays === "show" && !state.countries.size
+  const filtersAreDefault = () => !state.q.trim() && !state.types && !state.impacts && !state.statuses && state.holidays === "show" && !state.countries.size
     && state.groups.size === DEFAULT_GROUPS.length && DEFAULT_GROUPS.every(g => state.groups.has(g));
   function renderActive(shown) {
     $("active").innerHTML = filtersAreDefault() ? ""
-      : `<button type="button" class="linkbtn" data-act="filters" title="Back to G20, all impact levels and categories, no search">Reset filters</button>`;
+      : `<button type="button" class="linkbtn" data-act="filters" title="Back to G20, all impact levels, categories and statuses, no search">Reset filters</button>`;
     const total = events.filter(e => !e.dup).length;
     $("count").innerHTML = `<b>${shown.toLocaleString()}</b> of ${total.toLocaleString()} events`;
   }
   function resetFilters() {
-    Object.assign(state, { q: "", types: null, impacts: null, holidays: "show", groups: new Set(DEFAULT_GROUPS), countries: new Set() });
+    Object.assign(state, { q: "", types: null, impacts: null, statuses: null, holidays: "show", groups: new Set(DEFAULT_GROUPS), countries: new Set() });
     q.value = ""; qClear.hidden = true;
   }
   function clearFilter(act) {
     switch (act) {
       case "types": state.types = null; break;
       case "impacts": state.impacts = null; break;
+      case "statuses": state.statuses = null; break;
       case "filters": resetFilters(); break;
       case "range": picked = defaultRange(); day = null; return rangeChanged();
       case "all": resetFilters(); picked = defaultRange(); day = null; return rangeChanged();
@@ -415,6 +428,7 @@ function startApp({ apiKey, onLogout }) {
     }
     const why = state.types && !state.types.size ? ["No categories are selected.", "types", "Select all categories"]
       : state.impacts && !state.impacts.size ? ["No impact levels are selected.", "impacts", "Select all impact levels"]
+      : state.statuses && !state.statuses.size ? ["No statuses are selected.", "statuses", "Select all statuses"]
       : ["No events match these filters.", "all", "Clear all filters"];
     return `<div class="empty"><strong>${why[0]}</strong><span>Try widening a filter or clearing the search.</span>
       <button type="button" class="btn sm" data-act="${why[1]}">${why[2]}</button></div>`;
@@ -428,7 +442,7 @@ function startApp({ apiKey, onLogout }) {
   }
 
   function render() {
-    typeDD.render(); impactDD.render();
+    typeDD.render(); impactDD.render(); statusDD.render();
     renderCountryPreset();
     $("searchToggle").classList.toggle("has-query", !!state.q.trim());
     renderDates();
@@ -479,8 +493,16 @@ function startApp({ apiKey, onLogout }) {
   });
 
   // ---- Clock -------------------------------------------------------------------------
+  // With a Status filter on, a row whose status changes (e.g. Upcoming → Awaiting)
+  // may need to appear or disappear, so re-render when any status changes.
+  let statusSig = "";
   function tick() {
     const now = Date.now();
+    if (state.statuses) {
+      const sig = events.map(e => Events.status(e, now).kind[0]).join("");
+      if (statusSig && sig !== statusSig) render();
+      statusSig = sig;
+    } else statusSig = "";
     alerts.check();
     scheduleReleasePoll();
     if (table.tick(now)) { // calendar day rolled over: "this week" and "today" follow the clock
