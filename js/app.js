@@ -114,7 +114,7 @@ function startApp({ apiKey, onLogout }) {
   });
 
   // Day tabs: one per day of the picked range (2 to 7 days), plus "Week" for all of it.
-  // Counts reflect every other filter.
+  // Counts reflect every other filter, and a red dot marks days with a high-impact release.
   function renderDayTabs() {
     const box = $("daytabs");
     const days = Time.daysBetween(picked.from, picked.to) + 1;
@@ -132,12 +132,12 @@ function startApp({ apiKey, onLogout }) {
     const t = today(), sel = selectedDay();
     const tab = (key, label, count, cls = "", extra = "", aria = label) =>
       `<button type="button" class="daytab${cls}" data-day="${key}" aria-pressed="${(key || null) === (sel || null)}" aria-label="${esc(aria)}: ${n(count)}">
-        <span class="dt-day">${label}${extra}</span><span class="dt-n${count ? "" : " is-zero"}">${count.toLocaleString()}</span></button>`;
+        <span class="dt-day">${label}${extra}</span><span class="dt-n">${n(count)}</span></button>`;
     let html = tab("", "Week", total, " week", "", "Whole range");
     for (let i = 0; i < days; i++) {
       const k = Time.addDays(picked.from, i);
-      // Today shows in the accent colour; no badge or high-impact dot (the Impact column has those).
-      html += tab(k, Time.tabDay(k), counts.get(k) || 0, k < t ? " is-past" : k === t ? " is-today" : "", "",
+      html += tab(k, Time.tabDay(k), counts.get(k) || 0, k < t ? " is-past" : "",
+        (k === t ? ` <span class="dt-today">Today</span>` : "") + (high.has(k) ? `<span class="dt-hi" title="High-impact release"></span>` : ""),
         Time.dayLabel(k) + (k === t ? " (today)" : "") + (high.has(k) ? ", has a high-impact release" : ""));
     }
     box.innerHTML = html;
@@ -232,7 +232,7 @@ function startApp({ apiKey, onLogout }) {
   });
 
 
-  // Countries dropdown on the title line: one preset at a time (Entire world, a built-in
+  // Countries dropdown, first on the filter line: one preset at a time (Entire world, a built-in
   // group or one of yours), or "Choose countries…" for individual countries without
   // making a group. Picked countries show as the country's name or "3 countries".
   let presetKey = "";
