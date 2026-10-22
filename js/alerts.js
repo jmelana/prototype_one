@@ -10,8 +10,6 @@
 //   acknowledged  fired and seen; never fires again for this event
 //
 // Bell clicks:   none -> armed -> none,   triggered -> acknowledged -> none
-// Demo:          armed -> triggered (demo) -> acknowledging re-arms it, so the
-//                real alert still goes off at its scheduled time
 // Alerts run in this page only. Nothing fires while the page is closed; an armed
 // alert whose window opened meanwhile fires on the next check after reopening.
 const Alerts = (() => {
@@ -51,7 +49,10 @@ const Alerts = (() => {
     const raw = store.get("alertStates", {});
     if (raw && typeof raw === "object") {
       for (const [id, s] of Object.entries(raw)) {
-        if (s && ["armed", "triggered", "acknowledged"].includes(s.state) && Number.isFinite(s.eventTs)) states.set(id, s);
+        if (!s || !["armed", "triggered", "acknowledged"].includes(s.state) || !Number.isFinite(s.eventTs)) continue;
+        // A demo alarm saved by an earlier version goes back to armed (the demo feature is gone).
+        if (s.demo) { const { demo, firedAt, ...rest } = s; states.set(id, { ...rest, state: "armed" }); }
+        else states.set(id, s);
       }
     }
     const listeners = new Set();
@@ -87,12 +88,7 @@ const Alerts = (() => {
       return stateOf(id);
     }
 
-    // A demo alarm goes back to armed; a real one becomes acknowledged.
-    function acked(s) {
-      if (!s.demo) return { ...s, state: "acknowledged", acknowledgedAt: now() };
-      const { demo, firedAt, ...rest } = s;
-      return { ...rest, state: "armed" };
-    }
+    const acked = s => ({ ...s, state: "acknowledged", acknowledgedAt: now() });
 
     function acknowledge(id) {
       const s = states.get(id);
@@ -108,16 +104,6 @@ const Alerts = (() => {
       for (const [id, s] of states) if (s.state === "triggered") { states.set(id, acked(s)); ids.push(id); }
       if (ids.length) { persist(); emit({ type: "state", ids }); }
       return ids;
-    }
-
-    // Demo: set off every armed alert now. Returns the fired ids.
-    function demoFire() {
-      const t = now(), fired = [];
-      for (const [id, s] of states) {
-        if (s.state === "armed") { states.set(id, { ...s, state: "triggered", firedAt: t, demo: true }); fired.push(id); }
-      }
-      if (fired.length) { persist(); emit({ type: "fired", ids: fired, demo: true }); }
-      return fired;
     }
 
     // Fires every armed alert whose window has opened (or whose awaited release is
@@ -166,7 +152,7 @@ const Alerts = (() => {
     }
 
     return {
-      stateOf, canArm, toggle, acknowledge, acknowledgeAll, check, demoFire, triggered, counts, fireTime, info, clearAll,
+      stateOf, canArm, toggle, acknowledge, acknowledgeAll, check, triggered, counts, fireTime, info, clearAll,
       settings: () => settings, updateSettings,
       onChange: fn => listeners.add(fn),
     };

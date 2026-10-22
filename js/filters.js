@@ -36,9 +36,11 @@ const Filters = (() => {
   // `skip` leaves one facet out so dropdown counts show what toggling it would give.
   function matches(e, state, ctx, skip) {
     if (state.dedupe && e.dup) return false;
-    if (state.holidays === "hide" ? e.holiday : state.holidays === "only" && !e.holiday) return false;
-    if (skip !== "impacts" && state.impacts && !state.impacts.has(e.impact)) return false;
-    if (skip !== "types" && state.types && !state.types.has(e.type)) return false;
+    // "only" is the holidays-only view: Impact and Categories don't apply there.
+    const only = state.holidays === "only";
+    if (state.holidays === "hide" ? e.holiday : only && !e.holiday) return false;
+    if (!only && skip !== "impacts" && state.impacts && !state.impacts.has(e.impact)) return false;
+    if (!only && skip !== "types" && state.types && !state.types.has(e.type)) return false;
     if (skip !== "countries" && ctx.countries && !ctx.countries.has(e.country)) return false;
     if (ctx.q && !e.event.toLowerCase().includes(ctx.q)) return false;
     if (state.range) {

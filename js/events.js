@@ -1,27 +1,29 @@
 // ---- Event data: normalize, classify, status -------------------------------
 const Events = (() => {
   // Finnhub has no category field, so report types come from keywords in the event name.
-  // Rules are checked top to bottom; first match wins.
+  // Categories follow ForexFactory's trader-oriented set, plus Energy and Holiday.
+  // Rules are checked top to bottom; first match wins, so specific rules come first
+  // ("BoE Bailey Speech" is a speech, not Central Bank; "Retail Price Index" is
+  // Inflation, not Growth; "Housing Price Index" is Housing, not Inflation; "ISM
+  // Services Prices" is a business survey, not Inflation).
   const TYPE_RULES = [
-    ["Politics",      /\belection|plenum|referendum/i],
-    ["Bond auctions", /auction|tender|syndication|refunding/i],
-    ["Energy & commodities", /\b(eia|api)\b|baker hughes|wasde|dairy/i],
-    ["Inflation",     /\bcpi|inflation|\bpce\b/i],
-    ["GDP & growth",  /gdpnow/i],
-    ["PMI & surveys", /fed\b.*(index|survey|activity)|\b(nfib|ism|zew|ifo)\b/i],
-    ["Central bank",  /interest rate|rate decision|loan prime|\b(fed|fomc|ecb|boe|boj|boc|rba|rbnz|snb|bcb|cbr|pboc|mas|rbi|riksbank|norges|bundesbank)\b|monetary|press conference|key rate|overnight (lending|borrowing)|reserve requirement|deposit (facility )?rate|repo rate|copom|mpc|speech|minutes|summary of opinions|reserve balances/i],
-    ["Housing",       /housing|\bhouse\b|home|building permit|mortgage|construction|dwelling|property|real estate|\brent/i],
-    ["Inflation",     /inflation|\bcpi\b|\bppi\b|\bpce\b|price|deflator/i],
-    ["Employment",    /employ|jobless|payroll|\bjobs?\b|wage|earning|labou?r|claimant|jolts|\bhours\b|participation|jobseeker|overtime/i],
-    ["GDP & growth",  /\bgdp|growth rate|gdpnow|productivity|leading|coincident|economic activity|economic index/i],
-    ["PMI & surveys", /\bpmi\b|\bism\b|confidence|sentiment|expectation|survey|climate|zew|ifo|tankan|michigan|outlook|\bnfib\b|fed .*index|manufacturing index|services index|business conditions|focus market|optimism|barometer|tendency|managers index|ai group|supply chain/i],
-    ["Trade",         /trade|export|import|current account|touris|terms of/i],
-    ["Consumer",      /retail|consumer|personal (income|spending)|household|car registration|vehicle sales|redbook|spending|consumption|car sales|motorbike|wholesale sales|household/i],
-    ["Industry",      /industrial|manufactur|factory|durable|capacity|production|machinery|orders|output|inventor/i],
-    ["Energy & commodities", /\beia\b|\bapi\b|crude|oil|rig count|rigs|natural gas|gasoline|distillate|wasde|dairy|commodit/i],
-    ["Government & fiscal",  /budget|fiscal|government|debt|ecofin|eurogroup|treasury|tax|borrowing/i],
-    ["Money & credit",       /loan|\bfdi\b|money supply|\bm[0-3]\b|credit|reserves|lending|deposit|investment|bond|private sector|foreign exchange/i],
+    ["Speeches",         /speech|speaks|testimony|testifies|press conference|remarks|hearing/i],
+    ["Bonds",            /auction|tender|syndication|refunding/i],
+    ["Misc",             /\belection|plenum|referendum|dairy|wasde|commodit|consumer credit|debt to gdp/i],
+    ["Growth",           /gdpnow|national activity/i],
+    ["Central Bank",     /outlook report|monetary policy report|financial stability|marginal lending/i],
+    ["Energy",           /\b(eia|api)\b|crude|\boil\b|natural gas|gasoline|distillate|heating oil|refinery|rig count|baker hughes|cushing/i],
+    ["Housing",          /housing|\bhouse\b|home|building permit|mortgage|\bmba\b|construction|dwelling|property|real estate|\brent\b/i],
+    ["Consumer Surveys", /consumer (confidence|sentiment|expectation|climate|morale)|michigan|\bgfk\b|westpac/i],
+    ["Business Surveys", /\bpmi\b|\bism\b|\b(nfib|zew|ifo|kof|cbi|cfib)\b|tankan|fed\b.*(index|survey|activity)|empire state|confidence|sentiment|optimism|barometer|business climate|climate indicator|business conditions|tendency|outlook|survey|managers index|ai group|economy watchers|manufacturing index|services index/i],
+    ["Inflation",        /inflation|\bcpif?\b|\bppi\b|\bpce\b|price|deflator/i],
+    ["Central Bank",     /interest rate|rate decision|loan prime|policy rate|repo rate|key rate|cash rate|deposit (facility )?rate|lending facility|overnight (lending|borrowing)|reserve requirement|monetary|minutes|summary of opinions|copom|\bmpc\b|\bfomc\b|\b(fed|ecb|boe|boj|boc|rba|rbnz|snb|bcb|cbr|pboc|mas|rbi|riksbank|norges|bundesbank)\b|reserve balances/i],
+    ["Employment",       /employ|jobless|payroll|\bjobs?\b|wage|earning|labou?r|claimant|jolts|\bhours\b|participation|jobseeker|overtime/i],
+    ["Growth",           /\bgdp|growth rate|productivity|leading|coincident|economic activity|economic index|industrial|manufactur|factory|durable|capacity|production|output|orders|inventor|machinery|retail|spending|consumption|personal income|car registration|vehicle sales|car sales|redbook|wholesale sales|motorbike|fixed investment|private investment|trade|export|import|current account|touris|terms of|corporate profits/i],
   ];
+  // Order shown in the Categories menu (Holiday first, Misc last).
+  const TYPES = ["Holiday", "Growth", "Inflation", "Employment", "Central Bank", "Speeches", "Bonds",
+                 "Housing", "Consumer Surveys", "Business Surveys", "Energy", "Misc"];
   const IMPACTS = ["high", "medium", "low"];
 
   function isHoliday(e) {
@@ -31,7 +33,7 @@ const Events = (() => {
   function classify(e) {
     if (isHoliday(e)) return "Holiday";
     for (const [name, re] of TYPE_RULES) if (re.test(e.event)) return name;
-    return "Other";
+    return "Misc";
   }
 
   // Finnhub times are UTC, "YYYY-MM-DD HH:MM:SS"
@@ -84,5 +86,5 @@ const Events = (() => {
     return { kind: "past", label: "Past", title: "Scheduled time has passed. This event doesn't publish a value" };
   }
 
-  return { IMPACTS, normalize, status };
+  return { IMPACTS, TYPES, normalize, status };
 })();

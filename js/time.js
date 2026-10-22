@@ -125,7 +125,30 @@ const Time = (() => {
     return part(sec, "second");
   }
 
+  // Date text as a JavaFX DatePicker shows it: the locale's short date with a 4-digit
+  // year ("10/19/2026" in the US, "2026-10-19" in Canada, "19/10/2026" in the UK).
+  function shortDateFmt(locale) {
+    return new Intl.DateTimeFormat(locale, { dateStyle: "short", timeZone: "UTC" });
+  }
+  function pickerDate(key, locale) {
+    return shortDateFmt(locale).formatToParts(new Date(key + "T00:00:00Z"))
+      .map(p => p.type === "year" ? key.slice(0, 4) : p.value).join("");
+  }
+  // Reads typed text back in the same field order; null when it isn't a real date.
+  function parsePickerDate(text, locale) {
+    const order = shortDateFmt(locale).formatToParts(new Date(Date.UTC(2026, 0, 5)))
+      .map(p => p.type).filter(t => t === "year" || t === "month" || t === "day");
+    const nums = String(text).trim().split(/\D+/).filter(Boolean).map(Number);
+    if (nums.length !== 3) return null;
+    const v = {};
+    order.forEach((t, i) => { v[t] = nums[i]; });
+    if (v.year < 100) v.year += 2000;
+    const d = new Date(Date.UTC(v.year, v.month - 1, v.day));
+    if (d.getUTCFullYear() !== v.year || d.getUTCMonth() !== v.month - 1 || d.getUTCDate() !== v.day) return null;
+    return d.toISOString().slice(0, 10);
+  }
+
   function rel(n, unit) { return rtf ? rtf.format(n, unit) : `in ${n} ${unit}${n === 1 ? "" : "s"}`; }
 
-  return { ZONES, LOCAL_ZONE, resolve, isValid, time, dayKey, dayLabel, addDays, daysBetween, shortDay, tabDay, offset, zoneLabel, countdown, timeLeft };
+  return { ZONES, LOCAL_ZONE, resolve, isValid, time, dayKey, dayLabel, addDays, daysBetween, shortDay, tabDay, offset, zoneLabel, countdown, timeLeft, pickerDate, parsePickerDate };
 })();

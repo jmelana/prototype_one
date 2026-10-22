@@ -89,14 +89,16 @@ function startApp({ apiKey, onLogout }) {
     rangeChanged();
   }
   function renderDates() {
-    $("dateFrom").value = picked.from;
-    $("dateTo").value = picked.to;
+    $("dateFrom").value = Time.pickerDate(picked.from);
+    $("dateTo").value = Time.pickerDate(picked.to);
+    $("dateFromPick").value = picked.from;
+    $("dateToPick").value = picked.to;
     const t = $("todayBtn");
     t.setAttribute("aria-pressed", day === "today");
     t.title = day === "today" ? "Showing today only. Click to show the selected dates" : "Show today only";
     // Only Today locks the range. With another day picked, the fields stay usable and
     // changing them goes back to showing the whole range (see setPicked).
-    for (const id of ["dateFrom", "dateTo", "prevWeek", "nextWeek", "rangeBtn"]) $(id).disabled = day === "today";
+    for (const id of ["dateFrom", "dateTo", "dateFromPick", "dateToPick", "prevWeek", "nextWeek", "rangeBtn"]) $(id).disabled = day === "today";
     // Phones show the range as one compact button ("Oct 19 – 25") that opens the date fields.
     const [fm, fd] = Time.shortDay(picked.from).split(" "), [tm, td] = Time.shortDay(picked.to).split(" ");
     $("rangeText").textContent = picked.from === picked.to ? `${fm} ${fd}` : fm === tm ? `${fm} ${fd} – ${td}` : `${fm} ${fd} – ${tm} ${td}`;
@@ -112,14 +114,14 @@ function startApp({ apiKey, onLogout }) {
   });
 
   // Day tabs: one per day of the picked range (2 to 7 days), plus "Week" for all of it.
-  // Counts reflect every other filter, and a red dot marks days with a high-impact release.
+  // Counts reflect every other filter.
   function renderDayTabs() {
     const box = $("daytabs");
     const days = Time.daysBetween(picked.from, picked.to) + 1;
     box.hidden = loading || days < 2 || days > 7;
     if (box.hidden) return;
     const counts = new Map(), high = new Set();
-    for (const e of Filters.apply(events, { ...state, range: { ...picked } }, groups, dayOf)) {
+    for (const e of unavailable() ? [] : Filters.apply(events, { ...state, range: { ...picked } }, groups, dayOf)) {
       const k = dayOf(e);
       counts.set(k, (counts.get(k) || 0) + 1);
       if (e.impact === "high") high.add(k);
@@ -130,12 +132,12 @@ function startApp({ apiKey, onLogout }) {
     const t = today(), sel = selectedDay();
     const tab = (key, label, count, cls = "", extra = "", aria = label) =>
       `<button type="button" class="daytab${cls}" data-day="${key}" aria-pressed="${(key || null) === (sel || null)}" aria-label="${esc(aria)}: ${n(count)}">
-        <span class="dt-day">${label}${extra}</span><span class="dt-n">${n(count)}</span></button>`;
+        <span class="dt-day">${label}${extra}</span><span class="dt-n${count ? "" : " is-zero"}">${count.toLocaleString()}</span></button>`;
     let html = tab("", "Week", total, " week", "", "Whole range");
     for (let i = 0; i < days; i++) {
       const k = Time.addDays(picked.from, i);
-      html += tab(k, Time.tabDay(k), counts.get(k) || 0, k < t ? " is-past" : "",
-        (k === t ? ` <span class="dt-today">Today</span>` : "") + (high.has(k) ? `<span class="dt-hi" title="High-impact release"></span>` : ""),
+      // Today shows in the accent colour; no badge or high-impact dot (the Impact column has those).
+      html += tab(k, Time.tabDay(k), counts.get(k) || 0, k < t ? " is-past" : k === t ? " is-today" : "", "",
         Time.dayLabel(k) + (k === t ? " (today)" : "") + (high.has(k) ? ", has a high-impact release" : ""));
     }
     box.innerHTML = html;
@@ -149,30 +151,43 @@ function startApp({ apiKey, onLogout }) {
   });
   $("prevWeek").addEventListener("click", () => setPicked(Time.addDays(picked.from, -7), Time.addDays(picked.to, -7)));
   $("nextWeek").addEventListener("click", () => setPicked(Time.addDays(picked.from, 7), Time.addDays(picked.to, 7)));
-  $("dateFrom").addEventListener("change", e => e.target.value ? setPicked(e.target.value, picked.to, "from") : renderDates());
-  $("dateTo").addEventListener("change", e => e.target.value ? setPicked(picked.from, e.target.value, "to") : renderDates());
-  // Clicking a date field opens the picker rather than selecting a part of the date.
-  for (const id of ["dateFrom", "dateTo"]) {
-    const input = $(id);
-    input.addEventListener("click", () => { try { input.showPicker(); } catch { /* older browsers: native behavior */ } });
+  // Date fields work like a JavaFX DatePicker: an editable field showing the locale's
+  // short date, committed with Enter or on leaving it (bad text reverts), and a calendar
+  // button (or Alt+Down / F4) that opens the calendar.
+  for (const [id, end] of [["dateFrom", "from"], ["dateTo", "to"]]) {
+    const input = $(id), pick = $(id + "Pick");
+    const apply = key => key ? setPicked(end === "from" ? key : picked.from, end === "to" ? key : picked.to, end) : renderDates();
+    const open = () => { try { pick.showPicker(); } catch { input.focus(); } };
+    input.addEventListener("change", () => apply(Time.parsePickerDate(input.value)));
+    input.addEventListener("keydown", e => {
+      if (e.key === "Enter") apply(Time.parsePickerDate(input.value));
+      else if (e.key === "Escape") renderDates();
+      else if (e.key === "F4" || (e.altKey && e.key === "ArrowDown")) { e.preventDefault(); open(); }
+    });
+    pick.addEventListener("change", () => apply(pick.value));
+    $(id + "Box").querySelector(".tb-calbtn").addEventListener("click", e => { e.preventDefault(); if (!input.disabled) open(); });
+    // Touch screens: tapping the date opens the calendar instead of the keyboard.
+    if (matchMedia("(pointer: coarse)").matches) { input.readOnly = true; input.addEventListener("click", open); }
   }
-  // The date fields, Holidays and the time zone clock never highlight when clicked.
+  // The date fields and the Countries dropdown never highlight when clicked.
   // Reached with Tab, they get a faint border (kbd-focus) so keyboard focus stays visible.
   let keyboardNav = false;
   document.addEventListener("keydown", e => { if (e.key === "Tab") keyboardNav = true; }, true);
   document.addEventListener("pointerdown", () => { keyboardNav = false; }, true);
-  for (const [control, box] of [["dateFrom", "dateFromBox"], ["dateTo", "dateToBox"], ["holidays", "holidaysPick"]]) {
+  for (const [control, box] of [["dateFrom", "dateFromBox"], ["dateTo", "dateToBox"], ["countryPreset", "countryPick"]]) {
     $(control).addEventListener("focus", () => $(box).classList.toggle("kbd-focus", keyboardNav));
     $(control).addEventListener("blur", () => $(box).classList.remove("kbd-focus"));
   }
 
   // ---- Option sources ----------------------------------------------------------
-  const visibleTypes = () => [...new Set(events.map(e => e.type))].filter(t => t !== "Holiday" || state.holidays !== "hide");
+  const visibleTypes = () => [...new Set(events.map(e => e.type))];
+  // Fixed order (Holiday first, above a separator; Misc last), like ForexFactory's list.
   function typeOptions() {
     const c = Filters.countBy(events, state, groups, "types", "type", dayOf);
-    return visibleTypes()
-      .sort((a, b) => (c.get(b) || 0) - (c.get(a) || 0) || a.localeCompare(b))
-      .map(t => ({ value: t, label: t, count: c.get(t) || 0 }));
+    const have = new Set(visibleTypes());
+    const types = Events.TYPES.filter(t => have.has(t)).map(t => ({ value: t, label: t, count: c.get(t) || 0 }));
+    if (types[0] && types[0].value === "Holiday" && types[1]) types[1].sep = true;
+    return types;
   }
   function impactOptions() {
     const c = Filters.countBy(events, state, groups, "impacts", "impact", dayOf);
@@ -204,49 +219,51 @@ function startApp({ apiKey, onLogout }) {
     onClear: () => { state.impacts = new Set(); render(); },
   });
 
-  function setHolidays(mode) {
-    state.holidays = mode;
-    // Showing holidays is an explicit ask to see them, even under a category filter;
-    // hiding them removes the Holiday category from it.
-    if (state.types) {
-      mode === "hide" ? state.types.delete("Holiday") : state.types.add("Holiday");
-      if (visibleTypes().every(t => state.types.has(t))) state.types = null;
+
+  // Countries dropdown on the title line: one preset at a time (Entire world, a built-in
+  // group or one of yours), or "Choose countries…" for individual countries without
+  // making a group. Picked countries show as the country's name or "3 countries".
+  let presetKey = "";
+  function renderCountryPreset() {
+    const sel = $("countryPreset");
+    const key = groups.all().map(g => g.id + ":" + g.name).join("|");
+    if (key !== presetKey) {
+      presetKey = key;
+      const opt = (v, t) => `<option value="${esc(v)}">${esc(t)}</option>`;
+      const custom = groups.custom();
+      // No headings: presets, then your groups and the two actions, split by separators
+      // (a JavaFX ChoiceBox takes Separator items the same way).
+      sel.innerHTML = opt("all", "Entire world")
+        + groups.builtins().map(g => opt(g.id, g.name)).join("")
+        + `<option value="custom" disabled></option>`
+        + (custom.length ? `<hr>${custom.map(g => opt(g.id, g.name)).join("")}` : "")
+        + `<hr>${opt("choose", "Choose countries…")}${opt("edit", "Edit groups…")}`;
     }
-    render();
+    const single = state.groups.size === 1 && !state.countries.size && groups.get([...state.groups][0]);
+    const picked = !state.groups.size ? [...state.countries] : [];
+    const custom = sel.querySelector('option[value="custom"]');
+    custom.textContent = picked.length === 1 ? Countries.name(picked[0]) : picked.length ? `${picked.length} countries` : "Custom selection";
+    custom.hidden = !(state.groups.size || state.countries.size) || !!single;
+    sel.value = !state.groups.size && !state.countries.size ? "all" : single ? [...state.groups][0] : "custom";
+    $("countryPick").title = picked.length > 1 ? picked.map(Countries.name).sort().join(", ") : "Countries";
+    fitSelect(sel);
   }
-  $("holidays").addEventListener("change", e => setHolidays(e.target.value));
+  $("countryPreset").addEventListener("change", e => {
+    const v = e.target.value;
+    if (v === "edit") { renderCountryPreset(); return openSettings("groups"); }
+    if (v === "choose") { renderCountryPreset(); MultiSelect.closeOthers(); return picker.open(); }
+    state.groups = v === "all" ? new Set() : new Set([v]);
+    state.countries = new Set();
+    render();
+  });
 
   const picker = new CountryPicker($("countryDialog"), {
-    groups,
-    countries: () => {
-      const c = Filters.countBy(events, state, groups, "countries", "country", dayOf);
-      return allCountryCodes().map(code => ({ code, count: c.get(code) || 0 }));
-    },
-    selection: () => ({ groups: state.groups, countries: state.countries }),
-    onApply: sel => { state.groups = new Set(sel.groups); state.countries = new Set(sel.countries); render(); },
-    onManageGroups: () => openSettings("groups"),
+    countries: allCountryCodes,
+    selection: () => [...(Filters.countrySet(state, groups) || [])], // start from what's shown
+    onApply: codes => { state.groups = new Set(); state.countries = new Set(codes); render(); },
+    onSaveAsGroup: codes => { openSettings("groups"); settings.newGroup(codes); },
   });
-  $("countryBtn").addEventListener("click", () => { MultiSelect.closeOthers(); picker.open(); });
-  $("countryDialog").addEventListener("close", () => $("countryBtn").focus());
-
-  function renderCountryBtn() {
-    const btn = $("countryBtn");
-    const names = [...state.groups].map(id => groups.get(id)).filter(Boolean);
-    const codes = [...state.countries];
-    const n = names.length + codes.length;
-    // Groups show as the group's own badge (stacked when there are several); otherwise a
-    // globe. The number counts individually picked countries only, never groups.
-    let icon = Icons.globe;
-    if (names.length) {
-      const g = names[0], stack = names.length > 1 ? " is-stack" : "";
-      icon = g.builtin ? `<span class="gbadge tb-gbadge${stack}">${esc(g.name)}</span>` : `<span class="tb-gicon${stack}">${Icons.layers}</span>`;
-    }
-    btn.innerHTML = icon + (codes.length ? `<span class="tb-badge">${codes.length}</span>` : "");
-    btn.classList.toggle("has-group", names.length > 0);
-    const label = n ? [...names.map(g => g.name), ...codes.map(Countries.name)].join(", ") : "All countries";
-    btn.setAttribute("aria-label", `Countries: ${label}. Change`);
-    btn.title = "Countries: " + label;
-  }
+  $("countryDialog").addEventListener("close", () => { if (!settings.isOpen) $("countryPreset").focus(); });
 
   // ---- Time zone -------------------------------------------------------------------
   // The status-bar dropdown changes the zone for this session. The default zone
@@ -259,19 +276,20 @@ function startApp({ apiKey, onLogout }) {
     }
     const extra = Time.ZONES.some(z => z.id === selected) ? ""
       : `<option value="${esc(selected)}">${esc(selected)} (${Time.offset(selected, at)})</option>`;
-    return extra + [...byGroup].map(([g, zs]) =>
-      `<optgroup label="${esc(g)}">${zs.map(z => `<option value="${esc(z.id)}">${esc(Time.zoneLabel(z, at))}</option>`).join("")}</optgroup>`).join("");
+    // Regions split by separators rather than headings (a JavaFX ChoiceBox takes Separator items).
+    return extra + [...byGroup].map(([, zs]) =>
+      zs.map(z => `<option value="${esc(z.id)}">${esc(Time.zoneLabel(z, at))}</option>`).join("")).join("<hr>");
   }
-  function buildZones() { $("tz").innerHTML = zoneOptionsHtml(zone); $("tz").value = zone; fitZoneSelect(); }
+  function buildZones() { $("tz").innerHTML = zoneOptionsHtml(zone); $("tz").value = zone; fitSelect($("tz")); }
   // A select is as wide as its longest option; size it to the chosen one so the ▾ sits by the text.
   const measure = document.createElement("canvas").getContext("2d");
-  function fitZoneSelect() {
-    const sel = $("tz"), cs = getComputedStyle(sel);
+  function fitSelect(sel) {
+    const cs = getComputedStyle(sel);
     measure.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
     const text = sel.options[sel.selectedIndex] ? sel.options[sel.selectedIndex].text : "";
     sel.style.width = Math.ceil(measure.measureText(text).width + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight) + 4) + "px";
   }
-  document.fonts && document.fonts.ready.then(fitZoneSelect); // re-fit once Inter has loaded
+  document.fonts && document.fonts.ready.then(() => { fitSelect($("tz")); fitSelect($("countryPreset")); }); // re-fit once Inter has loaded
   function setZone(id) {
     const wasDefault = isDefaultRange();
     zone = id;
@@ -347,51 +365,34 @@ function startApp({ apiKey, onLogout }) {
     render(); // edits change membership, so results can change
   });
 
-  // ---- Active filters ------------------------------------------------------------
-  function listText(set, labels = v => v) {
-    if (!set.size) return "none";
-    const xs = [...set].map(labels);
-    return xs.length > 2 ? `${xs.slice(0, 2).join(", ")} +${xs.length - 2}` : xs.join(", ");
-  }
+  // ---- Reset filters ---------------------------------------------------------------
+  // No chips: each dropdown already shows its value. A "Reset filters" link appears at
+  // the start of the filter line whenever a filter differs from its default.
+  const filtersAreDefault = () => !state.q.trim() && !state.types && !state.impacts && state.holidays === "show" && !state.countries.size
+    && state.groups.size === DEFAULT_GROUPS.length && DEFAULT_GROUPS.every(g => state.groups.has(g));
   function renderActive(shown) {
-    const chips = [];
-    const chip = (act, html, label, arg = "") =>
-      chips.push(`<span class="chip">${html}<button type="button" class="chip-x" data-act="${act}" data-arg="${esc(arg)}" aria-label="Remove filter: ${esc(label)}" title="Remove">${Icons.x}</button></span>`);
-    if (state.types) chip("types", `Categories: ${esc(listText(state.types))}`, "categories");
-    if (state.impacts) chip("impacts", `Impact: ${esc(listText(state.impacts, v => v[0].toUpperCase() + v.slice(1)))}`, "impact");
-    for (const id of state.groups) { const g = groups.get(id); if (g) chip("group", `${Icons.layers}${esc(g.name)}`, g.name, id); }
-    for (const c of state.countries) chip("country", `${Countries.flag(c)}${esc(Countries.name(c))}`, Countries.name(c), c);
-    if (state.q.trim()) chip("q", `Search: “${esc(state.q.trim())}”`, "search");
-    if (state.holidays !== "show") chip("holidays", `${Icons.calendar}${state.holidays === "hide" ? "Holidays hidden" : "Holidays only"}`, "holidays");
-    if (day) chip("day", `${Icons.calendar}${day === "today" ? "Today" : esc(Time.dayLabel(day).replace(/^(\w{3})\w*, (\w+ \d+), \d+$/, "$1, $2"))}`, "single day");
-    else if (!isDefaultRange()) {
-      chip("range", `${Icons.calendar}${Time.shortDay(picked.from)}${picked.from === picked.to ? "" : " – " + Time.shortDay(picked.to)}`, "date range");
-    }
-    $("active").innerHTML = chips.join("") + (chips.length > 1 ? `<button type="button" class="linkbtn" data-act="all">Clear all</button>` : "");
-    const total = events.filter(e => !e.dup && (state.holidays !== "hide" || !e.holiday)).length;
+    $("active").innerHTML = filtersAreDefault() ? ""
+      : `<button type="button" class="linkbtn" data-act="filters" title="Back to G20, all impact levels and categories, no search">Reset filters</button>`;
+    const total = events.filter(e => !e.dup).length;
     $("count").innerHTML = `<b>${shown.toLocaleString()}</b> of ${total.toLocaleString()} events`;
   }
-  function clearFilter(act, arg) {
+  function resetFilters() {
+    Object.assign(state, { q: "", types: null, impacts: null, holidays: "show", groups: new Set(DEFAULT_GROUPS), countries: new Set() });
+    q.value = ""; qClear.hidden = true;
+  }
+  function clearFilter(act) {
     switch (act) {
       case "types": state.types = null; break;
       case "impacts": state.impacts = null; break;
-      case "group": state.groups.delete(arg); break;
-      case "country": state.countries.delete(arg); break;
-      case "q": q.value = ""; state.q = ""; qClear.hidden = true; break;
-      case "holidays": $("holidays").value = "show"; return setHolidays("show");
-      case "day": day = null; return rangeChanged();
+      case "filters": resetFilters(); break;
       case "range": picked = defaultRange(); day = null; return rangeChanged();
-      case "all":
-        Object.assign(state, { q: "", types: null, impacts: null, holidays: "show", groups: new Set(DEFAULT_GROUPS), countries: new Set() });
-        q.value = ""; qClear.hidden = true; $("holidays").value = "show";
-        picked = defaultRange(); day = null;
-        return rangeChanged();
+      case "all": resetFilters(); picked = defaultRange(); day = null; return rangeChanged();
     }
     render();
   }
   document.addEventListener("click", e => {
     const b = e.target.closest("#active [data-act], .empty-row [data-act]");
-    if (b) clearFilter(b.dataset.act, b.dataset.arg);
+    if (b) clearFilter(b.dataset.act);
   });
 
   // ---- Table -----------------------------------------------------------------------
@@ -402,12 +403,14 @@ function startApp({ apiKey, onLogout }) {
 
   function emptyHtml() {
     if (loading) return `<div class="empty"><strong>Loading…</strong></div>`;
+    if (unavailable()) {
+      return `<div class="empty"><strong>Can't load these dates right now.</strong>
+        <span>The data service can't be reached and there's no saved copy of these dates. Retrying automatically.</span></div>`;
+    }
     const { from, to } = state.range;
     if (!events.some(e => { const d = dayOf(e); return d >= from && d <= to; })) {
       const when = from === to ? Time.dayLabel(from) : `${Time.shortDay(from)} and ${Time.shortDay(to)}`;
-      const note = mode === "live" || !events.length ? ""
-        : `<span>The sample data covers ${Time.shortDay(dayOf(events[0]))} – ${Time.shortDay(dayOf(events[events.length - 1]))}.</span>`;
-      return `<div class="empty"><strong>No events ${from === to ? "on" : "between"} ${esc(when)}.</strong>${note}
+      return `<div class="empty"><strong>No events ${from === to ? "on" : "between"} ${esc(when)}.</strong>
         <button type="button" class="btn sm" data-act="range">Show this week</button></div>`;
     }
     const why = state.types && !state.types.size ? ["No categories are selected.", "types", "Select all categories"]
@@ -417,7 +420,7 @@ function startApp({ apiKey, onLogout }) {
       <button type="button" class="btn sm" data-act="${why[1]}">${why[2]}</button></div>`;
   }
   function renderTable() {
-    const rows = Filters.apply(events, state, groups, dayOf);
+    const rows = unavailable() ? [] : Filters.apply(events, state, groups, dayOf);
     // Showing this week: days before today start folded (the user can unfold them).
     const t = today(), thisWeek = !day && isDefaultRange();
     table.render(rows, { zone, now: Date.now(), emptyHtml: emptyHtml(), autoFold: d => thisWeek && d < t });
@@ -426,11 +429,10 @@ function startApp({ apiKey, onLogout }) {
 
   function render() {
     typeDD.render(); impactDD.render();
-    renderCountryBtn();
+    renderCountryPreset();
     $("searchToggle").classList.toggle("has-query", !!state.q.trim());
     renderDates();
     renderDayTabs();
-    $("holidays").value = state.holidays;
     renderActive(renderTable());
   }
 
@@ -448,7 +450,7 @@ function startApp({ apiKey, onLogout }) {
       const ts = e ? e.ts : info.eventTs;
       const d = new Date(ts);
       return {
-        id, ts, demo: !!info.demo, released: !!e && e.actual != null,
+        id, ts, released: !!e && e.actual != null,
         flag: e ? Countries.flag(e.country) : "",
         title: e ? `${e.name} · ${e.event}` : info.label || "Event",
         scheduled: `${Time.dayLabel(Time.dayKey(d, zone))}, ${Time.time(d, zone)} (${Time.offset(zone, d)})`,
@@ -493,10 +495,12 @@ function startApp({ apiKey, onLogout }) {
   // ---- Data loading --------------------------------------------------------------
   // Live Finnhub data, refreshed every few minutes (and about a minute after each
   // release, see scheduleReleasePoll) so actuals replace "Awaiting" and alerts
-  // waiting on a release fire. If Finnhub fails before anything has
-  // loaded, the bundled sample is shown and labeled as not live; the timer keeps
-  // retrying and switches to live data once Finnhub answers.
-  let loading = true, lastRaw = "", refreshTimer = null, mode = "live", loaded = null, rangeTimer = null;
+  // waiting on a release fire. Every good response is also saved in this browser,
+  // so the page opens instantly with the last data and, when the service can't be
+  // reached, keeps showing it (labeled with when it was saved) while it retries.
+  // mode: "live" (fetched this session), "saved" (from the local copy), "none".
+  let loading = true, lastRaw = "", refreshTimer = null, mode = "none", loaded = null, rangeTimer = null;
+  let offline = false, savedAt = 0;
   // Finnhub dates are UTC; pad a day each side so zone-shifted events are included.
   const fetchWindow = () => ({ from: Time.addDays(state.range.from, -1), to: Time.addDays(state.range.to, 1) });
   const clock = () => Time.time(new Date(), zone);
@@ -506,44 +510,67 @@ function startApp({ apiKey, onLogout }) {
     el.className = "source" + (kind ? " is-" + kind : "");
     el.textContent = text;
   }
+  // Local copy: the last few fetch windows, newest first. If storage is full, keep fewer.
+  const CACHE_KEY = "calendarCache", CACHE_MAX = 4;
+  const covers = (w, need) => !!w && w.from <= need.from && w.to >= need.to;
+  function saveCache(win, text) {
+    const list = (Store.get(CACHE_KEY, []) || []).filter(c => c.from !== win.from || c.to !== win.to);
+    list.unshift({ from: win.from, to: win.to, savedAt: Date.now(), text });
+    for (let n = Math.min(list.length, CACHE_MAX); n > 0 && !Store.set(CACHE_KEY, list.slice(0, n)); n--);
+  }
+  const fromCache = need => (Store.get(CACHE_KEY, []) || []).find(c => covers(c, need)) || null;
+  function useCache(c) {
+    mode = "saved"; loaded = { from: c.from, to: c.to }; savedAt = c.savedAt;
+    if (c.text !== lastRaw) { lastRaw = c.text; load(JSON.parse(c.text)); }
+  }
+  // Offline and the dates shown aren't fully in what's loaded: show nothing rather than a partial week.
+  const unavailable = () => offline && !covers(loaded, fetchWindow());
+  const savedLabel = () => { const d = new Date(savedAt); return `${Time.shortDay(Time.dayKey(d, zone))}, ${Time.time(d, zone)}`; };
+
   function load(raw) {
     loading = false;
     events = Events.normalize(raw);
     byId = new Map(events.map(e => [e.id, e]));
-    const have = new Set(events.map(e => e.country));
-    state.countries.forEach(c => { if (!have.has(c)) state.countries.delete(c); });
     render();
     alerts.check(); // window opened while the page was closed, or an awaited release is in
     syncAlarm();    // alerts still unacknowledged from before a reload
   }
 
   async function refreshLive() {
+    const win = fetchWindow();
     try {
-      const win = fetchWindow();
       const text = await Finnhub.fetchCalendar(apiKey, win);
-      mode = "live";
-      loaded = win;
+      mode = "live"; loaded = win; offline = false;
+      saveCache(win, text);
       if (text !== lastRaw) { lastRaw = text; load(JSON.parse(text)); } // skip re-render when unchanged
-      setSource(`Live · updated ${clock()}`, "live");
+      else if (loading) { loading = false; render(); }
+      lastUpdated = clock();
+      setSource(`Live · updated ${lastUpdated}`, "live");
+      renderRefresh();
       scheduleReleasePoll();
     } catch (err) {
-      if (mode === "live" && lastRaw) {
-        setSource(`Live · update failed at ${clock()} (${err.message}); retrying automatically`, "warn");
-        return;
+      offline = true;
+      const c = fromCache(win);
+      if (mode === "live" && covers(loaded, win)) {
+        setSource(`Update failed at ${clock()}; showing data from ${lastUpdated}. Retrying automatically`, "warn");
+      } else if (c) {
+        useCache(c);
+        setSource(`Can't reach the data service. Showing data saved ${savedLabel()}. Retrying automatically`, "warn");
+      } else {
+        setSource(`${err.message[0].toUpperCase()}${err.message.slice(1)}. Retrying automatically`, "warn");
       }
-      if (mode !== "sample") {
-        mode = "sample";
-        try { load(await Finnhub.loadSample()); }
-        catch (e) { loading = false; render(); }
-      }
-      setSource(`Sample data from Oct 20, 2026, not live: ${err.message}`, "warn");
+      if (loading) { loading = false; }
+      render();
+      renderRefresh();
     }
   }
-  // Fetch again when the dates shown go beyond what's loaded (live data only).
+  // Fetch again when the dates shown go beyond what's loaded. A saved copy that
+  // covers the new dates shows straight away while the fetch runs.
   function ensureRangeLoaded() {
-    if (mode !== "live" || loading) return;
+    if (loading) return;
     const need = fetchWindow();
-    if (loaded && loaded.from <= need.from && loaded.to >= need.to) return;
+    if (mode === "live" && covers(loaded, need)) return;
+    if (!covers(loaded, need)) { const c = fromCache(need); if (c) useCache(c); }
     clearTimeout(rangeTimer);
     rangeTimer = setTimeout(() => {
       setSource(`Loading ${Time.shortDay(state.range.from)} – ${Time.shortDay(state.range.to)}…`);
@@ -555,6 +582,27 @@ function startApp({ apiKey, onLogout }) {
     refreshTimer = setInterval(refreshLive, REFRESH_MS);
     return refreshLive();
   }
+
+  // Refresh link (right end of the filter line). Reads "Refreshing…" while fetching, then rests
+  // for 10 seconds so repeated clicks don't use up the API quota. The tooltip says
+  // when the data was last updated. Automatic updates carry on regardless.
+  const REFRESH_REST = 10e3;
+  let refreshing = false, lastUpdated = "";
+  function renderRefresh() {
+    const b = $("refreshBtn");
+    b.textContent = refreshing ? "Refreshing…" : "Refresh";
+    b.title = refreshing ? "Refreshing…"
+      : mode === "saved" ? `Showing data saved ${savedLabel()}`
+      : lastUpdated ? `Last updated ${lastUpdated}` : "Refresh the calendar";
+  }
+  $("refreshBtn").addEventListener("click", async () => {
+    const b = $("refreshBtn");
+    if (refreshing || b.disabled) return;
+    refreshing = true; b.disabled = true; renderRefresh();
+    await startRefresh();
+    refreshing = false; renderRefresh();
+    setTimeout(() => { b.disabled = false; }, REFRESH_REST);
+  });
 
   // ---- Release polling ------------------------------------------------------------
   // About a minute after each scheduled release, fetch again so the actual value and
@@ -578,11 +626,14 @@ function startApp({ apiKey, onLogout }) {
     if (next !== Infinity) releaseTimer = setTimeout(() => { releaseDue = Infinity; refreshLive(); }, Math.min(next - now, 2 ** 31 - 1));
   }
 
-  $("logout").addEventListener("click", () => onLogout());
+  // Logging out also removes the saved copy, so the data isn't readable without logging in.
+  $("logout").addEventListener("click", () => { Store.set(CACHE_KEY, []); onLogout(); });
 
   buildZones();
   renderZoneNote();
-  render(); // empty table with the loading message
+  const saved = fromCache(fetchWindow());
+  if (saved) useCache(saved); // open with the last data straight away
+  else render();              // empty table with the loading message
   setSource("Loading…");
   startRefresh();
 }

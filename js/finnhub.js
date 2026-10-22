@@ -26,17 +26,5 @@ const Finnhub = (() => {
     return text;
   }
 
-  // The bundled sample is only downloaded when it's needed.
-  function loadSample() {
-    if (typeof SAMPLE_CALENDAR !== "undefined") return Promise.resolve(SAMPLE_CALENDAR);
-    return new Promise((resolve, reject) => {
-      const s = document.createElement("script");
-      s.src = "js/data/sample-calendar.js";
-      s.onload = () => resolve(SAMPLE_CALENDAR);
-      s.onerror = () => reject(new Error("Couldn't load the sample data."));
-      document.head.appendChild(s);
-    });
-  }
-
-  return { fetchCalendar, loadSample };
+  return { fetchCalendar };
 })();

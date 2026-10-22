@@ -8,16 +8,13 @@
 //     theme: { get() -> "dark" | "light" | "system", set(value) },
 //     onClose(),
 //   })
-const AlertsDemoHint = "Sets off every event with a filled bell so you can see the alarm. Your real alerts still go off at their scheduled time.";
 
 class SettingsPanel {
   constructor(el, opts) {
     this.el = el;
     this.opts = opts;
     this.edit = null;          // { id, name, members: Set } while editing a group
-    this.confirmDelete = null; // group id awaiting delete confirmation
     const tabs = [["groups", "Country groups"], ["alerts", "Alerts"], ["display", "Display"]];
-    this.demoTimer = null;
     el.setAttribute("aria-labelledby", "setTitle");
     el.innerHTML = `
       <div class="modal-head">
@@ -35,7 +32,7 @@ class SettingsPanel {
     this.panes = Object.fromEntries(tabs.map(([k]) => [k, el.querySelector("#pane-" + k)]));
 
     // Escape closes the dialog natively; a click on the backdrop closes it too.
-    el.addEventListener("close", () => { this.edit = null; this.confirmDelete = null; this.opts.onClose(); });
+    el.addEventListener("close", () => { this.edit = null; this.opts.onClose(); });
     el.addEventListener("click", e => { if (e.target === el) this.close(); });
     el.addEventListener("keydown", e => {
       const tab = e.target.closest("[role=tab]");
@@ -81,27 +78,23 @@ class SettingsPanel {
         case "new": this.startEdit(null, "", []); break;
         case "edit": this.startEdit(g.id, g.name, g.members); break;
         case "dup": this.startEdit(null, this.uniqueName(g.name + " (copy)"), g.members); break;
-        case "del": this.confirmDelete = id; this.renderGroups(); p.querySelector("[data-act=del-yes]").focus(); break;
-        case "del-no": this.confirmDelete = null; this.renderGroups(); p.querySelector(`[data-act=del][data-id="${CSS.escape(id)}"]`).focus(); break;
-        case "del-yes": this.confirmDelete = null; this.opts.groups.remove(id); p.querySelector("[data-act=new]").focus(); break;
+        case "del":
+          // JavaFX-style confirmation Alert on top of Settings; focus returns to the list.
+          Confirm.ask({ title: "Delete group", header: `Delete “${g.name}”?`, message: "This group will be removed. This can't be undone.", ok: "Delete" })
+            .then(yes => {
+              if (yes) this.opts.groups.remove(id);
+              const back = p.querySelector(`[data-act=del][data-id="${CSS.escape(id)}"]`) || p.querySelector("[data-act=new]");
+              if (back) back.focus();
+            });
+          break;
         case "cancel": this.edit = null; this.renderGroups(); p.querySelector("[data-act=new]").focus(); break;
-        case "unpick": this.edit.members.delete(b.dataset.code); this.syncEditor(); break;
-        case "clear-members": this.edit.members.clear(); this.syncEditor(); break;
+        case "clear-members": this.edit.members.clear(); this.tree.sync(); this.syncEditor(); break;
       }
-    });
-    p.addEventListener("change", e => {
-      if (!this.edit || !e.target.matches(".pick-list input")) return;
-      e.target.checked ? this.edit.members.add(e.target.value) : this.edit.members.delete(e.target.value);
-      this.syncEditor();
     });
     p.addEventListener("input", e => {
       if (!this.edit) return;
       if (e.target.name === "name") { this.edit.name = e.target.value; this.showError(""); }
-      if (e.target.name === "find") {
-        const q = e.target.value.trim().toLowerCase();
-        p.querySelectorAll(".pick-list label").forEach(l => { l.hidden = q && !l.dataset.s.includes(q); });
-        p.querySelectorAll(".pick-list .pick-region").forEach(r => { r.hidden = !r.querySelector("label:not([hidden])"); });
-      }
+      if (e.target.name === "find") this.tree.filter(e.target.value);
     });
     p.addEventListener("submit", e => {
       e.preventDefault();
@@ -131,14 +124,6 @@ class SettingsPanel {
     const { groups } = this.opts;
     const custom = groups.custom();
     const row = g => {
-      if (this.confirmDelete === g.id) return `
-        <div class="grp is-confirm" role="group" aria-label="Confirm delete">
-          <span class="grp-confirm">Delete “${esc(g.name)}”? This can't be undone.</span>
-          <span class="grp-acts">
-            <button type="button" class="btn danger sm" data-act="del-yes" data-id="${esc(g.id)}">Delete</button>
-            <button type="button" class="btn sm" data-act="del-no" data-id="${esc(g.id)}">Keep</button>
-          </span>
-        </div>`;
       return `
         <div class="grp">
           <div class="grp-main">
@@ -165,15 +150,11 @@ class SettingsPanel {
       ${groups.builtins().map(row).join("")}`;
   }
 
+  // Opens the editor for a new group with these countries ticked ("Save as group…").
+  newGroup(members) { this.showTab("groups"); this.startEdit(null, "", members); }
+
   startEdit(id, name, members) {
     this.edit = { id, name, members: new Set(members) };
-    const byRegion = new Map(Countries.REGION_ORDER.map(r => [r, []]));
-    for (const c of this.opts.countries()) byRegion.get(Countries.region(c)).push(c);
-    const list = [...byRegion].filter(([, cs]) => cs.length).map(([r, cs]) => `
-      <div class="pick-region"><div class="pick-h">${esc(r)}</div>${cs
-        .sort((a, b) => Countries.name(a).localeCompare(Countries.name(b)))
-        .map(c => `<label data-s="${esc((Countries.name(c) + " " + c).toLowerCase())}"><input type="checkbox" value="${c}">${Countries.flag(c)}<span>${esc(Countries.name(c))}</span></label>`).join("")}
-      </div>`).join("");
     this.panes.groups.innerHTML = `
       <form class="grp-form" novalidate>
         <h3 class="set-h">${id ? "Edit group" : "New group"}</h3>
@@ -181,9 +162,8 @@ class SettingsPanel {
           <input type="text" name="name" maxlength="40" autocomplete="off" placeholder="e.g. My Trading Countries" value="${esc(name)}"></label>
         <div class="field">
           <span class="field-label">Countries <span class="field-acts"><span class="n" data-count></span><button type="button" class="linkbtn" data-act="clear-members">Clear</button></span></span>
-          <div class="sel-chips" aria-live="polite"></div>
-          <input type="search" name="find" placeholder="Find a country" aria-label="Find a country" autocomplete="off">
-          <div class="pick-list" role="group" aria-label="Countries in this group">${list}</div>
+          <input type="search" name="find" placeholder="Search countries" aria-label="Search countries" autocomplete="off">
+          <div class="pick-list" role="group" aria-label="Countries in this group"></div>
         </div>
         <p class="form-err" role="alert"></p>
         <div class="form-acts">
@@ -191,18 +171,18 @@ class SettingsPanel {
           <button type="submit" class="btn primary">Save group</button>
         </div>
       </form>`;
+    // Same region tree as "Choose countries"; it edits this.edit.members directly.
+    this.tree = new CountryTree(this.panes.groups.querySelector(".pick-list"), { onChange: () => this.syncEditor() });
+    this.tree.build(this.opts.countries(), members);
+    this.tree.selected = this.edit.members;
     this.syncEditor();
     this.panes.groups.querySelector("input[name=name]").focus();
   }
 
   syncEditor() {
     const p = this.panes.groups, m = this.edit.members;
-    p.querySelectorAll(".pick-list input").forEach(b => { b.checked = m.has(b.value); });
     p.querySelector("[data-count]").textContent = `${m.size} selected`;
     p.querySelector("[data-act=clear-members]").hidden = !m.size;
-    p.querySelector(".sel-chips").innerHTML = m.size
-      ? [...m].map(c => `<span class="chip">${Countries.flag(c)}${esc(Countries.name(c))}<button type="button" class="chip-x" data-act="unpick" data-code="${c}" aria-label="Remove ${esc(Countries.name(c))}">${Icons.x}</button></span>`).join("")
-      : `<span class="set-empty">No countries yet. Tick them below.</span>`;
     if (m.size) this.showError("");
   }
 
@@ -231,9 +211,6 @@ class SettingsPanel {
           <button type="submit" class="btn primary">Save</button>
         </div>
       </form>
-      <h3 class="set-h">Demo</h3>
-      <label class="check"><input type="checkbox" name="demo"> Set off my alerts in 5 seconds</label>
-      <p class="set-desc" data-demo-status aria-live="polite"></p>
       <h3 class="set-h">Your alerts</h3>
       <div class="alert-summary"></div>
       <p class="note">Alerts run in this browser tab only. This app has no server-side notification service, so nothing can go off while the page is closed. Alerts whose time came while it was closed go off when you reopen it.</p>`;
@@ -251,39 +228,11 @@ class SettingsPanel {
       this.opts.alerts.updateSettings({ lead: v });
       this.renderAlerts("Saved.");
     });
-    p.querySelector("[name=demo]").addEventListener("change", e => e.target.checked ? this.startDemo() : this.stopDemo("Demo cancelled."));
     p.addEventListener("click", e => {
       const b = e.target.closest("[data-act]"); if (!b) return;
       if (b.dataset.act === "ack-all") this.opts.alerts.acknowledgeAll();
       if (b.dataset.act === "off-all") this.opts.alerts.clearAll();
     });
-  }
-
-  // Demo: count down 5 seconds, then set off every armed alert (filled bell).
-  // Settings closes so the alarm window shows over the table.
-  startDemo() {
-    const status = this.panes.alerts.querySelector("[data-demo-status]");
-    if (!this.opts.alerts.counts().armed) {
-      this.panes.alerts.querySelector("[name=demo]").checked = false;
-      status.textContent = "Turn on at least one bell (filled yellow) in the table first.";
-      return;
-    }
-    let left = 5;
-    const show = () => { status.textContent = `Alarm in ${left} second${left === 1 ? "" : "s"}…`; };
-    show();
-    clearInterval(this.demoTimer);
-    this.demoTimer = setInterval(() => {
-      if (--left > 0) return show();
-      this.stopDemo();
-      this.close();
-      this.opts.alerts.demoFire();
-    }, 1000);
-  }
-  stopDemo(message = "") {
-    clearInterval(this.demoTimer);
-    this.demoTimer = null;
-    this.panes.alerts.querySelector("[name=demo]").checked = false;
-    this.panes.alerts.querySelector("[data-demo-status]").textContent = message || AlertsDemoHint;
   }
 
   renderAlerts(flash) {
@@ -294,7 +243,6 @@ class SettingsPanel {
     form.querySelector(".form-err").textContent = "";
     form.querySelector(".current").innerHTML = `${flash ? flash + " " : ""}Alerts go off <b>${esc(Alerts.describeLead(s.lead))}</b>.`;
 
-    if (!this.demoTimer) this.panes.alerts.querySelector("[data-demo-status]").textContent = AlertsDemoHint;
     this.renderAlertSummary();
   }
 

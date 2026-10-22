@@ -4,7 +4,7 @@
 //
 //   new MultiSelect(mountEl, {
 //     label, icon,
-//     options:  () => [{ value, label, count, prefix? }],
+//     options:  () => [{ value, label, count, prefix?, sep? }],   sep: separator above it
 //     selected: () => Set | null      (null = all)
 //     onToggle(value), onAll(), onClear(),
 //   })
@@ -100,10 +100,10 @@ class MultiSelect {
     this.btn.setAttribute("aria-label", `${this.opts.label}: ${this.valueEl.textContent}`);
     if (this.panel.hidden) return;
 
-    const key = options.map(o => o.value).join("\u0001");
+    const key = options.map(o => (o.sep ? "|" : "") + o.value).join("\u0001");
     if (key !== this.key) {
       this.key = key;
-      this.list.innerHTML = options.length ? options.map(o => `
+      this.list.innerHTML = options.length ? options.map(o => `${o.sep ? `<div class="menu-sep" role="separator"></div>` : ""}
         <label class="opt">
           <input type="checkbox" value="${esc(o.value)}">
           ${o.prefix || ""}<span class="opt-label">${esc(o.label)}</span>

@@ -3,7 +3,7 @@
 // Escape and backdrop clicks are ignored. Shows a live countdown to each release.
 //
 //   new AlarmDialog(dialogEl, {
-//     items: () => [{ id, flag, title, scheduled, ts, released, demo }],
+//     items: () => [{ id, flag, title, scheduled, ts, released }],
 //     onAcknowledge(),
 //   })
 class AlarmDialog {
@@ -25,13 +25,11 @@ class AlarmDialog {
   sync() {
     const items = this.opts.items();
     if (!items.length) return this.close();
-    const demo = items.every(i => i.demo);
     this.d.innerHTML = `
       <div class="modal-head"><div class="win-title">Alert</div></div>
       <div class="alarm-head">
         <div>
           <h2 id="alarmTitle">${items.length === 1 ? "Report alert" : `${items.length} report alerts`}</h2>
-          ${demo ? `<p class="alarm-sub">Demo alarm. Your real alerts will still go off at their scheduled time.</p>` : ""}
         </div>
         <span class="alarm-ico">${Icons.bellRing}</span>
       </div>
