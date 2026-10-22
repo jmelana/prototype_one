@@ -87,10 +87,11 @@ button { cursor: pointer; }
 
 .wrap { padding-block: 32px 40px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 1440px; margin: 0 auto; }
 .userbar { display: flex; justify-content: flex-end; margin: -8px 0 4px; }
+/* Log out is "hidden in plain sight": same colour as the page, still clickable and reachable with Tab */
+#logout, #logout:hover { color: var(--bg); text-decoration: none; }
 .top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 24px; margin-bottom: 36px; }
-/* Countries, time zone | settings, on the title line */
+/* Time zone | settings, on the title line */
 .top-acts { display: flex; align-items: center; gap: 12px; margin-left: auto; font-size: 12.5px; }
-.top-acts .sb-pick { margin-right: 6px; }
 .top-sep { color: var(--faint); font-size: 16px; line-height: 1; user-select: none; }
 /* Settings: a bare icon on the page background (no button chrome) */
 .head-icon { display: grid; place-items: center; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 3px; background: none; color: var(--muted); cursor: pointer; }
@@ -186,21 +187,20 @@ h1 { font-size: 20px; font-weight: 600; letter-spacing: -.01em; margin: 0; }
 .tb-dates .tb-btn:disabled:hover { background: var(--control); }
 
 /* Day tabs: Week, then one tab per day of the range */
-/* Day strip, like JavaFX TabPane headers: plain text on the page, one line per day,
-   a soft count pill, and a thin accent underline on the selected day. */
-.daytabs { display: flex; gap: 4px; margin-top: 10px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
+.daytabs { display: flex; gap: 2px; margin-top: 10px; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
+  overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
 .daytabs::-webkit-scrollbar { display: none; }
-.daytab { flex: 0 0 auto; display: flex; align-items: center; gap: 7px; padding: 7px 12px 8px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; color: var(--fg); cursor: pointer; }
-.daytab:hover .dt-day { color: var(--fg); }
-.dt-day { font-size: 13px; font-weight: 500; white-space: nowrap; }
-.dt-n { min-width: 20px; padding: 1px 6px; border-radius: 9px; background: var(--panel-2); color: var(--muted); font-size: 11px; font-weight: 500; line-height: 15px; text-align: center; font-variant-numeric: tabular-nums; }
-.dt-n.is-zero { opacity: .5; }
-.daytab.is-past .dt-day { color: var(--muted); }
-.daytab.is-today .dt-day { color: var(--accent-text); font-weight: 600; }
-.daytab[aria-pressed="true"] { border-bottom-color: var(--accent-text); }
-.daytab[aria-pressed="true"] .dt-day { color: var(--fg); font-weight: 600; }
-.daytab.is-today[aria-pressed="true"] .dt-day { color: var(--accent-text); }
-.daytab[aria-pressed="true"] .dt-n { background: color-mix(in srgb, var(--accent-text) 22%, transparent); color: var(--fg); }
+.daytab { flex: 1 0 auto; min-width: 84px; display: flex; flex-direction: column; align-items: center; gap: 2px; padding: 6px 10px; border: 0; border-radius: 6px; background: none; }
+.daytab:hover { background: var(--panel-2); }
+.dt-day { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.dt-n { font-size: 11.5px; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.daytab.is-past .dt-day, .daytab.week .dt-day { color: var(--muted); font-weight: 500; }
+.dt-today { font-size: 10px; font-weight: 600; padding: 0 5px; border-radius: 3px; background: var(--accent); color: var(--accent-fg); }
+.dt-hi { width: 6px; height: 6px; border-radius: 50%; background: var(--high); }
+.daytab[aria-pressed="true"], .daytab[aria-pressed="true"]:hover { background: var(--accent); }
+.daytab[aria-pressed="true"] .dt-day { color: var(--accent-fg); font-weight: 600; }
+.daytab[aria-pressed="true"] .dt-n { color: var(--accent-fg); opacity: .85; }
+.daytab[aria-pressed="true"] .dt-today { background: var(--accent-fg); color: var(--accent); }
 
 
 /* Icon-only toolbar buttons (search toggle) */
@@ -490,7 +490,7 @@ tbody tr[data-alert="triggered"] td:first-child { box-shadow: inset 3px 0 0 var(
 /* Focus: JavaFX's two-layer focus ring instead of a browser outline */
 :focus-visible { outline: none; box-shadow: 0 0 0 1px var(--focus), 0 0 0 3px color-mix(in srgb, var(--focus) 35%, transparent); }
 .tb-date:focus-visible, .tz-pick select:focus-visible, .vc-color input:focus-visible { box-shadow: none; }
-.tz-pick:focus-within { border-radius: 3px; box-shadow: 0 0 0 1px var(--focus); }
+.tz-pick.kbd-focus { border-radius: 3px; box-shadow: 0 0 0 1px var(--focus); } /* keyboard focus only, like Countries */
 
 /* TextField (search, settings fields, login) */
 .search input, .field input[type=text], .field input[type=search], .field input[type=password], .lead-row input {
@@ -519,6 +519,14 @@ tbody tr[data-alert="triggered"] td:first-child { box-shadow: inset 3px 0 0 var(
 .menu-item:hover, .menu-item:focus-visible, .opt:hover, .opt:has(:focus-visible) { background: var(--accent); color: var(--accent-fg); box-shadow: none; }
 .opt:hover .n, .opt:has(:focus-visible) .n, .opt:hover .opt-label, .opt:has(:focus-visible) .opt-label { color: inherit; }
 .opt input:focus-visible { box-shadow: none; }
+
+/* Day tabs: segmented ToggleButtons */
+.daytabs { gap: 0; padding: 0; background: none; border: 0; border-radius: 0; }
+.daytab { padding: 5px 10px; border: 1px solid var(--btn-border); border-left-width: 0; border-radius: 0; background: linear-gradient(var(--btn-top), var(--btn-bot)); box-shadow: inset 0 1px 0 var(--btn-hi); }
+.daytab:first-child { border-left-width: 1px; border-radius: 3px 0 0 3px; }
+.daytab:last-child { border-radius: 0 3px 3px 0; }
+.daytab:hover { background: linear-gradient(var(--btn-hover-top), var(--btn-hover-bot)); }
+.daytab[aria-pressed="true"], .daytab[aria-pressed="true"]:hover { background: linear-gradient(var(--def-top), var(--def-bot)); border-color: var(--def-border); box-shadow: inset 0 1px 2px rgba(0, 0, 0, .35); }
 
 /* CheckBox and RadioButton */
 input[type=checkbox], input[type=radio] { appearance: none; -webkit-appearance: none; display: inline-grid; place-items: center; flex: none; width: 15px; height: 15px; margin: 0;
