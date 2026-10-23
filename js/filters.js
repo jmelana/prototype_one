@@ -12,7 +12,6 @@ const Filters = (() => {
       q: "",
       types: null,
       impacts: null,
-      statuses: null,         // release status: "upcoming" | "awaiting" | "released" | "past"
       holidays: "show",       // "hide" | "show" | "only"
       groups: new Set(),      // selected group ids (built-in or custom)
       countries: new Set(),   // individually selected country codes
@@ -42,9 +41,6 @@ const Filters = (() => {
     if (state.holidays === "hide" ? e.holiday : only && !e.holiday) return false;
     if (!only && skip !== "impacts" && state.impacts && !state.impacts.has(e.impact)) return false;
     if (!only && skip !== "types" && state.types && !state.types.has(e.type)) return false;
-    // Status changes with the clock (Upcoming → Awaiting → Released). Holidays aren't
-    // filtered by status; the Holiday entry in Categories shows or hides them.
-    if (skip !== "statuses" && state.statuses && !e.holiday && !state.statuses.has(Events.status(e, ctx.now).kind)) return false;
     if (skip !== "countries" && ctx.countries && !ctx.countries.has(e.country)) return false;
     if (ctx.q && !e.event.toLowerCase().includes(ctx.q)) return false;
     if (state.range) {

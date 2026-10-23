@@ -192,12 +192,35 @@ class SettingsPanel {
   }
 
   // ---- Alerts ----------------------------------------------------------------
+  // Alerts tab: one on/off switch and one rule (countries, impact, categories; leave a
+  // part empty for "any"). Rule changes apply straight away; the lead time has Save.
   initAlerts() {
     const p = this.panes.alerts;
+    const cats = Events.TYPES.filter(t => t !== "Holiday");
     p.innerHTML = `
+      <label class="check alert-switch"><input type="checkbox" name="enabled"> <b>Turn on alerts</b></label>
+      <p class="set-desc" data-rule-summary aria-live="polite"></p>
+      <fieldset class="alert-rule">
+        <legend class="set-h">Alert me about</legend>
+        <p class="set-desc">An event needs to match every part. Leave a part empty to include everything.</p>
+        <div class="field">
+          <span class="field-label">Countries <span class="field-acts"><span class="n" data-count></span><button type="button" class="linkbtn" data-act="clear-countries">Clear</button></span></span>
+          <input type="search" name="ruleFind" placeholder="Search countries" aria-label="Search countries" autocomplete="off">
+          <div class="pick-list rule-countries" role="group" aria-label="Countries to alert on"></div>
+        </div>
+        <div class="field">
+          <span class="field-label">Impact</span>
+          <div class="rule-checks" role="group" aria-label="Impact levels to alert on">${Alerts.IMPACT_LEVELS.map(v =>
+            `<label class="check"><input type="checkbox" name="impact" value="${v}"> ${v[0].toUpperCase() + v.slice(1)}</label>`).join("")}</div>
+        </div>
+        <div class="field">
+          <span class="field-label">Categories</span>
+          <div class="rule-checks rule-cats" role="group" aria-label="Categories to alert on">${cats.map(v =>
+            `<label class="check"><input type="checkbox" name="type" value="${esc(v)}"> ${esc(v)}</label>`).join("")}</div>
+        </div>
+      </fieldset>
       <form class="alert-form" novalidate>
         <h3 class="set-h" id="leadLbl">Alert lead time</h3>
-        <p class="set-desc">When you turn on an event's bell, its alert goes off this long before the scheduled release.</p>
         <div class="lead-row" role="group" aria-labelledby="leadLbl">
           <input type="number" name="leadValue" min="0" step="1" inputmode="numeric" aria-label="Lead time amount" required>
           <select name="leadUnit" aria-label="Lead time unit">
@@ -214,6 +237,17 @@ class SettingsPanel {
       <h3 class="set-h">Your alerts</h3>
       <div class="alert-summary"></div>
       <p class="note">Alerts run in this browser tab only. This app has no server-side notification service, so nothing can go off while the page is closed. Alerts whose time came while it was closed go off when you reopen it.</p>`;
+
+    const rule = () => this.opts.alerts.settings().rule;
+    const setRule = patch => { this.opts.alerts.updateSettings({ rule: { ...rule(), ...patch } }); this.renderRuleSummary(); };
+    this.ruleTree = new CountryTree(p.querySelector(".rule-countries"), { onChange: sel => setRule({ countries: [...sel] }) });
+    p.querySelector("[name=enabled]").addEventListener("change", e => { this.opts.alerts.updateSettings({ enabled: e.target.checked }); this.renderRuleSummary(); });
+    p.querySelector("[name=ruleFind]").addEventListener("input", e => this.ruleTree.filter(e.target.value));
+    p.querySelector(".alert-rule").addEventListener("change", e => {
+      if (e.target.name === "impact") setRule({ impacts: [...p.querySelectorAll("[name=impact]:checked")].map(b => b.value) });
+      if (e.target.name === "type") setRule({ types: [...p.querySelectorAll("[name=type]:checked")].map(b => b.value) });
+    });
+
     const form = p.querySelector("form");
     form.addEventListener("input", () => { form.querySelector(".form-err").textContent = ""; form.leadValue.removeAttribute("aria-invalid"); });
     form.addEventListener("submit", e => {
@@ -231,19 +265,37 @@ class SettingsPanel {
     p.addEventListener("click", e => {
       const b = e.target.closest("[data-act]"); if (!b) return;
       if (b.dataset.act === "ack-all") this.opts.alerts.acknowledgeAll();
-      if (b.dataset.act === "off-all") this.opts.alerts.clearAll();
+      if (b.dataset.act === "clear-countries") { this.ruleTree.set([]); setRule({ countries: [] }); }
     });
   }
 
   renderAlerts(flash) {
     const p = this.panes.alerts, s = this.opts.alerts.settings(), form = p.querySelector("form");
+    p.querySelector("[name=enabled]").checked = s.enabled;
+    p.querySelector("[name=ruleFind]").value = "";
+    this.ruleTree.build(this.opts.countries(), s.rule.countries);
+    p.querySelectorAll("[name=impact]").forEach(b => { b.checked = s.rule.impacts.includes(b.value); });
+    p.querySelectorAll("[name=type]").forEach(b => { b.checked = s.rule.types.includes(b.value); });
     form.leadValue.value = s.lead.value;
     form.leadUnit.value = s.lead.unit;
     form.leadValue.removeAttribute("aria-invalid");
     form.querySelector(".form-err").textContent = "";
     form.querySelector(".current").innerHTML = `${flash ? flash + " " : ""}Alerts go off <b>${esc(Alerts.describeLead(s.lead))}</b>.`;
-
+    this.renderRuleSummary();
     this.renderAlertSummary();
+  }
+
+  // "On: alerts go off 10 minutes before upcoming High-impact events in United States, in any category."
+  renderRuleSummary() {
+    const p = this.panes.alerts, s = this.opts.alerts.settings();
+    const text = Alerts.describeRule(s.rule, s.lead, Countries.name);
+    p.querySelector("[data-rule-summary]").innerHTML = s.enabled
+      ? `<b>On:</b> alerts go off ${esc(text)}.`
+      : `Off. When on, alerts go off ${esc(text)}.`;
+    p.querySelector(".alert-rule").classList.toggle("is-off", !s.enabled);
+    const n = s.rule.countries.length;
+    p.querySelector("[data-count]").textContent = n ? `${n} selected` : "Any country";
+    p.querySelector("[data-act=clear-countries]").hidden = !n;
   }
 
   renderAlertSummary() {
@@ -251,16 +303,13 @@ class SettingsPanel {
     if (!el) return;
     const c = this.opts.alerts.counts();
     const any = c.armed + c.triggered + c.acknowledged;
-    el.innerHTML = !any ? `<p class="set-empty">No alerts set. Click a bell in the table to add one.</p>` : `
+    el.innerHTML = !any ? `<p class="set-empty">${this.opts.alerts.settings().enabled ? "No upcoming events match right now." : "Alerts are off."}</p>` : `
       <dl class="stats">
         <div><dt>Waiting</dt><dd>${c.armed}</dd></div>
         <div><dt>Need acknowledgment</dt><dd>${c.triggered}</dd></div>
-        <div><dt>Acknowledged</dt><dd>${c.acknowledged}</dd></div>
+        <div><dt>Went off</dt><dd>${c.acknowledged}</dd></div>
       </dl>
-      <div class="form-acts">
-        ${c.triggered ? `<button type="button" class="btn sm" data-act="ack-all">Acknowledge all</button>` : ""}
-        <button type="button" class="btn sm" data-act="off-all">Turn off all alerts</button>
-      </div>`;
+      ${c.triggered ? `<div class="form-acts"><button type="button" class="btn sm" data-act="ack-all">Acknowledge all</button></div>` : ""}`;
   }
 
   renderDisplay() {

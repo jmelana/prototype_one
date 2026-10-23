@@ -1,6 +1,6 @@
 // ---- Economic events table ---------------------------------------------------
 // render() rebuilds rows when filters or the time zone change. tick() and
-// refreshAlerts() patch status and bell cells in place, so periodic updates
+// refreshAlerts() patch rows and bell cells in place, so periodic updates
 // don't reset hover, focus or scroll.
 //
 // Day headers fold like parent rows in a JavaFX TreeTableView: a disclosure
@@ -42,10 +42,9 @@ class EventsTable {
     for (const tr of this.tbody.querySelectorAll(`tr[data-id][data-day="${day}"]`)) tr.hidden = collapse;
   }
 
-  static COLS = 9;
+  static COLS = 8;
   // Alerts are for anything not yet released: upcoming events, and data releases
   // past their time whose actual hasn't arrived. Past speeches/holidays never "release".
-  static canAlert(e, now) { return e.actual == null && (e.ts > now || (e.expectsValue && !e.holiday)); }
   static IMPACT_SHORT = { high: "High", medium: "Med", low: "Low" };
 
   // events: already filtered; emptyHtml shown when there are none.
@@ -99,40 +98,25 @@ class EventsTable {
       <td class="num c-act${signClass(e.actual)}">${fmtVal(e.actual, e.unit)}</td>
       <td class="num c-fc">${fmtVal(e.estimate, e.unit)}</td>
       <td class="num c-prev${signClass(e.prev)}">${fmtVal(e.prev, e.unit)}</td>
-      <td class="c-status"><span class="st st-${st.kind}" title="${esc(st.title)}">${esc(st.label)}</span></td>
       <td class="c-alert">${this.bellHtml(e, now)}</td>
     </tr>`;
   }
 
+  // Bells only show the state (alerts come from the rule in Settings → Alerts) and
+  // appear only while alerts are on: filled yellow = alert set, filled grey = it went
+  // off. Events without an alert have no bell. Clicking a bell opens Settings → Alerts.
   bellHtml(e, now) {
-    const a = this.opts.alerts, state = a.stateOf(e.id);
-    const ev = `${e.name} ${e.event}`;
-    let icon = Icons.bell, label, pressed = "false", disabled = "";
-    switch (state) {
-      case "armed": {
-        icon = Icons.bellFilled; pressed = "true";
-        const at = a.fireTime(e.id);
-        label = (a.info(e.id) || {}).awaitRelease ? `Alert on for ${ev}, goes off when it's released. Click to turn off`
-          : `Alert on for ${ev}${at > now ? `, goes off ${Time.countdown(at - now).toLowerCase()}` : ""}. Click to turn off`;
-        break;
-      }
-      case "triggered":
-        icon = Icons.bellRing; pressed = "true";
-        label = `Alert for ${ev} needs acknowledgment. Click to acknowledge`;
-        break;
-      case "acknowledged":
-        label = `Alert for ${ev} acknowledged. Click to clear it`;
-        break;
-      default:
-        if (!EventsTable.canAlert(e, now)) {
-          label = e.actual != null ? `${ev} is already released` : `${ev} has already happened, so no alert can be set`;
-          disabled = " disabled";
-        } else label = `Set an alert for ${ev}`;
-    }
-    return `<button type="button" class="bell bell-${state}" aria-pressed="${pressed}" aria-label="${esc(label)}" title="${esc(label)}"${disabled}>${icon}${state === "acknowledged" ? `<span class="bell-ack">${Icons.check}</span>` : ""}</button>`;
+    const a = this.opts.alerts, state = a.stateOf(e.id), ev = `${e.name} ${e.event}`;
+    if (!a.settings().enabled || state === "none") return "";
+    let label;
+    if (state === "armed") {
+      const at = a.fireTime(e.id);
+      label = `Alert set for ${ev}${at > now ? `, goes off ${Time.countdown(at - now).toLowerCase()}` : ""}`;
+    } else label = `Alert for ${ev} went off`;
+    return `<button type="button" class="bell bell-${state}" aria-label="${esc(label)}. Open alert settings" title="${esc(label)}. Click for alert settings">${Icons.bellFilled}</button>`;
   }
 
-  // Refresh statuses/countdowns. Returns true when the day changed (caller re-renders).
+  // Keep each row's release state current (it greys the time of released events). Returns true when the day changed (caller re-renders).
   tick(now) {
     if (this.rows.size && Time.dayKey(new Date(now), this.zone) !== this.todayKey) return true;
     for (const r of this.rows.values()) {
@@ -140,10 +124,6 @@ class EventsTable {
       if (st.label === r.statusKey) continue;
       r.statusKey = st.label;
       r.tr.dataset.status = st.kind;
-      const cell = r.tr.querySelector(".c-status");
-      cell.innerHTML = `<span class="st st-${st.kind}" title="${esc(st.title)}">${esc(st.label)}</span>`;
-      // Arming becomes impossible once the event passes.
-      if (r.tr.dataset.alert === "none") r.tr.querySelector(".c-alert").innerHTML = this.bellHtml(r.e, now);
     }
     return false;
   }

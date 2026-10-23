@@ -49,68 +49,51 @@ function startApp({ apiKey, onLogout }) {
   }
 
   // ---- Date range ----------------------------------------------------------------
-  // Dates are calendar days in the displayed zone. The From/To fields hold `picked`
-  // (default: Monday to Sunday of the current week). `day` narrows the table to one
-  // day without changing the fields: null (the whole range), "today" (follows the
-  // clock) or a "YYYY-MM-DD" date picked from the day tabs. state.range is what the
-  // table actually filters on.
-  const MAX_RANGE_DAYS = 60;
+  // Dates are calendar days in the displayed zone. The calendar always shows one week,
+  // Sunday to Saturday (default: the current week); the read-only From/To fields show
+  // its first and last day. ‹ › move a week at a time and This Week jumps back. `day` narrows the table to one day of the week
+  // (a day tab) without changing the fields; null shows the whole week. state.range
+  // is what the table actually filters on.
   const today = () => Time.dayKey(new Date(), zone);
-  function defaultRange() {
-    const t = today();
-    const weekday = new Date(t + "T12:00:00Z").getUTCDay(); // 0 = Sunday
-    const monday = Time.addDays(t, -((weekday + 6) % 7));
-    return { from: monday, to: Time.addDays(monday, 6) };
+  function weekOf(key) {
+    const sunday = Time.addDays(key, -new Date(key + "T12:00:00Z").getUTCDay()); // getUTCDay: 0 = Sunday
+    return { from: sunday, to: Time.addDays(sunday, 6) };
   }
+  const defaultRange = () => weekOf(today());
   let picked = defaultRange();
   let shownWeek = defaultRange(); // the default as of the last day rollover
   let day = null;
-  const selectedDay = () => (day === "today" ? today() : day);
+  const selectedDay = () => day;
   const isDefaultRange = () => { const d = defaultRange(); return picked.from === d.from && picked.to === d.to; };
   const applyRange = () => { const k = selectedDay(); state.range = k ? { from: k, to: k } : { ...picked }; };
   applyRange();
 
   function rangeChanged() { applyRange(); render(); ensureRangeLoaded(); }
-  // Clicking the selected day again goes back to the whole range.
+  // Clicking the selected day again goes back to the whole week.
   function selectDay(key) {
-    if (key && key === today()) key = "today";
     day = !key || key === day ? null : key;
     rangeChanged();
   }
-
-  // `moved` is the end the user changed; the other end follows to keep the range valid.
-  function setPicked(from, to, moved = "from") {
-    if (from > to) { if (moved === "from") to = from; else from = to; }
-    if (Time.daysBetween(from, to) > MAX_RANGE_DAYS) {
-      if (moved === "from") to = Time.addDays(from, MAX_RANGE_DAYS); else from = Time.addDays(to, -MAX_RANGE_DAYS);
-    }
-    picked = { from, to };
-    day = null; // editing the range means "show the range"
+  // Show the whole week containing `key` (from the date fields or the arrows).
+  function showWeekOf(key) {
+    picked = weekOf(key);
+    day = null;
     rangeChanged();
   }
   function renderDates() {
     $("dateFrom").value = Time.pickerDate(picked.from);
     $("dateTo").value = Time.pickerDate(picked.to);
-    $("dateFromPick").value = picked.from;
-    $("dateToPick").value = picked.to;
-    const t = $("todayBtn");
-    t.setAttribute("aria-pressed", day === "today");
-    t.title = day === "today" ? "Showing today only. Click to show the selected dates" : "Show today only";
-    // Only Today locks the range. With another day picked, the fields stay usable and
-    // changing them goes back to showing the whole range (see setPicked).
-    for (const id of ["dateFrom", "dateTo", "dateFromPick", "dateToPick", "prevWeek", "nextWeek", "rangeBtn"]) $(id).disabled = day === "today";
-    // Phones show the range as one compact button ("Oct 19 – 25") that opens the date fields.
+    // Phones show the range as one compact button ("Oct 18 – 24") that opens the date fields.
     const [fm, fd] = Time.shortDay(picked.from).split(" "), [tm, td] = Time.shortDay(picked.to).split(" ");
-    $("rangeText").textContent = picked.from === picked.to ? `${fm} ${fd}` : fm === tm ? `${fm} ${fd} – ${td}` : `${fm} ${fd} – ${tm} ${td}`;
-    // Reset appears only away from the current week; its space stays reserved.
-    $("thisWeek").classList.toggle("is-away", !isDefaultRange());
+    $("rangeText").textContent = fm === tm ? `${fm} ${fd} – ${td}` : `${fm} ${fd} – ${tm} ${td}`;
+    // This Week is greyed out while the current week is already showing.
+    $("thisWeek").disabled = isDefaultRange();
   }
-  $("todayBtn").addEventListener("click", () => selectDay(today()));
-  // Back to Monday–Sunday of this week, showing the whole week. Other filters stay.
+  // Back to Sunday–Saturday of this week, showing the whole week. Other filters stay.
   $("thisWeek").addEventListener("click", () => {
     picked = defaultRange(); day = null;
     rangeChanged();
-    $("nextWeek").focus(); // the reset button hides itself
+    $("nextWeek").focus(); // This Week greys out, so keep focus somewhere useful
   });
 
   // Day tabs: one per day of the picked range (2 to 7 days), plus "Week" for all of it.
@@ -149,32 +132,16 @@ function startApp({ apiKey, onLogout }) {
     const b = e.target.closest(".daytab");
     if (b) selectDay(b.dataset.day || null);
   });
-  $("prevWeek").addEventListener("click", () => setPicked(Time.addDays(picked.from, -7), Time.addDays(picked.to, -7)));
-  $("nextWeek").addEventListener("click", () => setPicked(Time.addDays(picked.from, 7), Time.addDays(picked.to, 7)));
-  // Date fields work like a JavaFX DatePicker: an editable field showing the locale's
-  // short date, committed with Enter or on leaving it (bad text reverts), and a calendar
-  // button (or Alt+Down / F4) that opens the calendar.
-  for (const [id, end] of [["dateFrom", "from"], ["dateTo", "to"]]) {
-    const input = $(id), pick = $(id + "Pick");
-    const apply = key => key ? setPicked(end === "from" ? key : picked.from, end === "to" ? key : picked.to, end) : renderDates();
-    const open = () => { try { pick.showPicker(); } catch { input.focus(); } };
-    input.addEventListener("change", () => apply(Time.parsePickerDate(input.value)));
-    input.addEventListener("keydown", e => {
-      if (e.key === "Enter") apply(Time.parsePickerDate(input.value));
-      else if (e.key === "Escape") renderDates();
-      else if (e.key === "F4" || (e.altKey && e.key === "ArrowDown")) { e.preventDefault(); open(); }
-    });
-    pick.addEventListener("change", () => apply(pick.value));
-    $(id + "Box").querySelector(".tb-calbtn").addEventListener("click", e => { e.preventDefault(); if (!input.disabled) open(); });
-    // Touch screens: tapping the date opens the calendar instead of the keyboard.
-    if (matchMedia("(pointer: coarse)").matches) { input.readOnly = true; input.addEventListener("click", open); }
-  }
-  // The date fields and the Countries and time zone dropdowns never highlight when clicked.
+  $("prevWeek").addEventListener("click", () => showWeekOf(Time.addDays(picked.from, -7)));
+  $("nextWeek").addEventListener("click", () => showWeekOf(Time.addDays(picked.from, 7)));
+  // The date fields only show the week (read-only, like a non-editable JavaFX DatePicker
+  // with its calendar button hidden): there are no custom ranges, only ‹ › and This Week.
+  // The Countries and time zone dropdowns never highlight when clicked.
   // Reached with Tab, they get a faint border (kbd-focus) so keyboard focus stays visible.
   let keyboardNav = false;
   document.addEventListener("keydown", e => { if (e.key === "Tab") keyboardNav = true; }, true);
   document.addEventListener("pointerdown", () => { keyboardNav = false; }, true);
-  for (const [control, box] of [["dateFrom", "dateFromBox"], ["dateTo", "dateToBox"], ["countryPreset", "countryPick"], ["tz", "tzPick"]]) {
+  for (const [control, box] of [["countryPreset", "countryPick"], ["tz", "tzPick"]]) {
     $(control).addEventListener("focus", () => $(box).classList.toggle("kbd-focus", keyboardNav));
     $(control).addEventListener("blur", () => $(box).classList.remove("kbd-focus"));
   }
@@ -195,11 +162,6 @@ function startApp({ apiKey, onLogout }) {
       value: v, label: v[0].toUpperCase() + v.slice(1), count: c.get(v) || 0,
       prefix: `<span class="imp imp-${v}" aria-hidden="true"><i></i><i></i><i></i></span>`,
     }));
-  }
-  const STATUSES = [["upcoming", "Upcoming"], ["awaiting", "Awaiting"], ["released", "Released"], ["past", "Past"]];
-  function statusOptions() {
-    const c = Filters.countBy(events, state, groups, "statuses", (e, now) => e.holiday ? null : Events.status(e, now).kind, dayOf);
-    return STATUSES.map(([v, label]) => ({ value: v, label, count: c.get(v) || 0 }));
   }
   // Countries in the data plus every group member, so any group can be picked.
   function allCountryCodes() {
@@ -223,13 +185,7 @@ function startApp({ apiKey, onLogout }) {
     onAll: () => { state.impacts = null; render(); },
     onClear: () => { state.impacts = new Set(); render(); },
   });
-  const statusDD = new MultiSelect($("ddStatus"), {
-    label: "Status", icon: Icons.clock,
-    options: statusOptions, selected: () => state.statuses,
-    onToggle: v => { state.statuses = Filters.toggle(state.statuses, v, STATUSES.map(s => s[0])); render(); },
-    onAll: () => { state.statuses = null; render(); },
-    onClear: () => { state.statuses = new Set(); render(); },
-  });
+
 
 
   // Countries dropdown, first on the filter line: one preset at a time (Entire world, a built-in
@@ -380,23 +336,22 @@ function startApp({ apiKey, onLogout }) {
   // ---- Reset filters ---------------------------------------------------------------
   // No chips: each dropdown already shows its value. A "Reset filters" link appears at
   // the start of the filter line whenever a filter differs from its default.
-  const filtersAreDefault = () => !state.q.trim() && !state.types && !state.impacts && !state.statuses && state.holidays === "show" && !state.countries.size
+  const filtersAreDefault = () => !state.q.trim() && !state.types && !state.impacts && state.holidays === "show" && !state.countries.size
     && state.groups.size === DEFAULT_GROUPS.length && DEFAULT_GROUPS.every(g => state.groups.has(g));
   function renderActive(shown) {
     $("active").innerHTML = filtersAreDefault() ? ""
-      : `<button type="button" class="linkbtn" data-act="filters" title="Back to G20, all impact levels, categories and statuses, no search">Reset filters</button>`;
+      : `<button type="button" class="linkbtn" data-act="filters" title="Back to G20, all impact levels and categories, no search">Reset filters</button>`;
     const total = events.filter(e => !e.dup).length;
     $("count").innerHTML = `<b>${shown.toLocaleString()}</b> of ${total.toLocaleString()} events`;
   }
   function resetFilters() {
-    Object.assign(state, { q: "", types: null, impacts: null, statuses: null, holidays: "show", groups: new Set(DEFAULT_GROUPS), countries: new Set() });
+    Object.assign(state, { q: "", types: null, impacts: null, holidays: "show", groups: new Set(DEFAULT_GROUPS), countries: new Set() });
     q.value = ""; qClear.hidden = true;
   }
   function clearFilter(act) {
     switch (act) {
       case "types": state.types = null; break;
       case "impacts": state.impacts = null; break;
-      case "statuses": state.statuses = null; break;
       case "filters": resetFilters(); break;
       case "range": picked = defaultRange(); day = null; return rangeChanged();
       case "all": resetFilters(); picked = defaultRange(); day = null; return rangeChanged();
@@ -411,7 +366,7 @@ function startApp({ apiKey, onLogout }) {
   // ---- Table -----------------------------------------------------------------------
   const table = new EventsTable($("rows"), {
     alerts,
-    onBell: e => alerts.toggle(e.id, e.ts, `${e.name} · ${e.event}`, { awaitRelease: e.ts <= Date.now() }),
+    onBell: () => openSettings("alerts"), // bells only show state; the rule lives in Settings
   });
 
   function emptyHtml() {
@@ -428,7 +383,6 @@ function startApp({ apiKey, onLogout }) {
     }
     const why = state.types && !state.types.size ? ["No categories are selected.", "types", "Select all categories"]
       : state.impacts && !state.impacts.size ? ["No impact levels are selected.", "impacts", "Select all impact levels"]
-      : state.statuses && !state.statuses.size ? ["No statuses are selected.", "statuses", "Select all statuses"]
       : ["No events match these filters.", "all", "Clear all filters"];
     return `<div class="empty"><strong>${why[0]}</strong><span>Try widening a filter or clearing the search.</span>
       <button type="button" class="btn sm" data-act="${why[1]}">${why[2]}</button></div>`;
@@ -442,7 +396,7 @@ function startApp({ apiKey, onLogout }) {
   }
 
   function render() {
-    typeDD.render(); impactDD.render(); statusDD.render();
+    typeDD.render(); impactDD.render();
     renderCountryPreset();
     $("searchToggle").classList.toggle("has-query", !!state.q.trim());
     renderDates();
@@ -486,23 +440,15 @@ function startApp({ apiKey, onLogout }) {
 
   alerts.onChange(change => {
     const now = Date.now();
-    if (change.type === "settings") table.refreshAlerts(null, now);
+    if (change.type === "settings") { alerts.sync(events); table.refreshAlerts(null, now); }
     else table.refreshAlerts(change.ids, now);
     if (change.type === "fired") announce(change.ids);
     if (change.type !== "settings") syncAlarm();
   });
 
   // ---- Clock -------------------------------------------------------------------------
-  // With a Status filter on, a row whose status changes (e.g. Upcoming → Awaiting)
-  // may need to appear or disappear, so re-render when any status changes.
-  let statusSig = "";
   function tick() {
     const now = Date.now();
-    if (state.statuses) {
-      const sig = events.map(e => Events.status(e, now).kind[0]).join("");
-      if (statusSig && sig !== statusSig) render();
-      statusSig = sig;
-    } else statusSig = "";
     alerts.check();
     scheduleReleasePoll();
     if (table.tick(now)) { // calendar day rolled over: "this week" and "today" follow the clock
@@ -554,6 +500,7 @@ function startApp({ apiKey, onLogout }) {
     events = Events.normalize(raw);
     byId = new Map(events.map(e => [e.id, e]));
     render();
+    alerts.sync(events); // arm upcoming events that match the alert rule
     alerts.check(); // window opened while the page was closed, or an awaited release is in
     syncAlarm();    // alerts still unacknowledged from before a reload
   }
@@ -605,17 +552,18 @@ function startApp({ apiKey, onLogout }) {
     return refreshLive();
   }
 
-  // Refresh link (right end of the filter line). Reads "Refreshing…" while fetching, then rests
+  // Refresh icon (after the search box, above the table). Spins while fetching, then rests
   // for 10 seconds so repeated clicks don't use up the API quota. The tooltip says
   // when the data was last updated. Automatic updates carry on regardless.
   const REFRESH_REST = 10e3;
   let refreshing = false, lastUpdated = "";
   function renderRefresh() {
     const b = $("refreshBtn");
-    b.textContent = refreshing ? "Refreshing…" : "Refresh";
+    b.classList.toggle("is-busy", refreshing);
     b.title = refreshing ? "Refreshing…"
-      : mode === "saved" ? `Showing data saved ${savedLabel()}`
-      : lastUpdated ? `Last updated ${lastUpdated}` : "Refresh the calendar";
+      : mode === "saved" ? `Refresh · showing data saved ${savedLabel()}`
+      : lastUpdated ? `Refresh · last updated ${lastUpdated}` : "Refresh";
+    b.setAttribute("aria-label", b.title);
   }
   $("refreshBtn").addEventListener("click", async () => {
     const b = $("refreshBtn");
