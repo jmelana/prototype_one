@@ -103,8 +103,8 @@ class EventsTable {
   }
 
   // Bells only show the state (alerts come from the rule in Settings → Alerts) and
-  // appear only while alerts are on: filled yellow = alert set, filled grey = it went
-  // off. Events without an alert have no bell. Clicking a bell opens Settings → Alerts.
+  // appear only while alerts are on: filled yellow = alert set, filled grey = it
+  // triggered. Events without an alert have no bell. Clicking a bell opens Settings → Alerts.
   bellHtml(e, now) {
     const a = this.opts.alerts, state = a.stateOf(e.id), ev = `${e.name} ${e.event}`;
     if (!a.settings().enabled || state === "none") return "";
@@ -112,7 +112,7 @@ class EventsTable {
     if (state === "armed") {
       const at = a.fireTime(e.id);
       label = `Alert set for ${ev}${at > now ? `, goes off ${Time.countdown(at - now).toLowerCase()}` : ""}`;
-    } else label = `Alert for ${ev} went off`;
+    } else label = `Alert for ${ev} triggered`;
     return `<button type="button" class="bell bell-${state}" aria-label="${esc(label)}. Open alert settings" title="${esc(label)}. Click for alert settings">${Icons.bellFilled}</button>`;
   }
 

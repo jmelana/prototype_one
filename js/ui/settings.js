@@ -265,6 +265,12 @@ class SettingsPanel {
     p.addEventListener("click", e => {
       const b = e.target.closest("[data-act]"); if (!b) return;
       if (b.dataset.act === "ack-all") this.opts.alerts.acknowledgeAll();
+      if (b.dataset.act === "clear-triggered") {
+        const n = this.opts.alerts.counts().acknowledged;
+        Confirm.ask({ title: "Clear triggered alerts", header: `Clear ${n} triggered alert${n === 1 ? "" : "s"}?`,
+          message: "Their grey bells disappear from the table. Alerts that are still waiting aren't affected.", ok: "Clear" })
+          .then(yes => { if (yes) this.opts.alerts.clearTriggered(); });
+      }
       if (b.dataset.act === "clear-countries") { this.ruleTree.set([]); setRule({ countries: [] }); }
     });
   }
@@ -306,10 +312,13 @@ class SettingsPanel {
     el.innerHTML = !any ? `<p class="set-empty">${this.opts.alerts.settings().enabled ? "No upcoming events match right now." : "Alerts are off."}</p>` : `
       <dl class="stats">
         <div><dt>Waiting</dt><dd>${c.armed}</dd></div>
-        <div><dt>Need acknowledgment</dt><dd>${c.triggered}</dd></div>
-        <div><dt>Went off</dt><dd>${c.acknowledged}</dd></div>
+        <div><dt>Needs acknowledgment</dt><dd>${c.triggered}</dd></div>
+        <div><dt>Triggered</dt><dd>${c.acknowledged}</dd></div>
       </dl>
-      ${c.triggered ? `<div class="form-acts"><button type="button" class="btn sm" data-act="ack-all">Acknowledge all</button></div>` : ""}`;
+      ${c.triggered || c.acknowledged ? `<div class="form-acts">
+        ${c.acknowledged ? `<button type="button" class="linkbtn" data-act="clear-triggered">Clear triggered alerts</button>` : ""}
+        ${c.triggered ? `<button type="button" class="btn sm" data-act="ack-all">Acknowledge all</button>` : ""}
+      </div>` : ""}`;
   }
 
   renderDisplay() {

@@ -189,6 +189,15 @@ const Alerts = (() => {
     const fireTime = id => { const s = states.get(id); return s ? s.eventTs - leadMs() : null; };
     const info = id => states.get(id) || null;
 
+    // "Clear triggered alerts": forget alerts that went off and were acknowledged (the
+    // grey bells). Waiting alerts and ones still needing acknowledgment stay.
+    function clearTriggered() {
+      const ids = [...states].filter(([, s]) => s.state === "acknowledged").map(([id]) => id);
+      ids.forEach(id => states.delete(id));
+      if (ids.length) { persist(); emit({ type: "state", ids }); }
+      return ids;
+    }
+
     function clearAll() {
       const ids = [...states.keys()];
       states.clear(); persist();
@@ -196,7 +205,7 @@ const Alerts = (() => {
     }
 
     return {
-      stateOf, canArm, toggle, acknowledge, acknowledgeAll, check, sync, triggered, counts, fireTime, info, clearAll,
+      stateOf, canArm, toggle, acknowledge, acknowledgeAll, check, sync, triggered, counts, fireTime, info, clearTriggered, clearAll,
       settings: () => settings, updateSettings,
       onChange: fn => listeners.add(fn),
     };
