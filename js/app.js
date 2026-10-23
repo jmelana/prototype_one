@@ -50,8 +50,8 @@ function startApp({ apiKey, onLogout }) {
 
   // ---- Date range ----------------------------------------------------------------
   // Dates are calendar days in the displayed zone. The calendar always shows one week,
-  // Sunday to Saturday (default: the current week); the read-only From/To fields show
-  // its first and last day. ‹ › move a week at a time and This Week jumps back. `day` narrows the table to one day of the week
+  // Sunday to Saturday (default: the current week). The ‹ › arrows either side of the
+  // day tabs move a week at a time and This Week jumps back. `day` narrows the table to one day of the week
   // (a day tab) without changing the fields; null shows the whole week. state.range
   // is what the table actually filters on.
   const today = () => Time.dayKey(new Date(), zone);
@@ -81,11 +81,6 @@ function startApp({ apiKey, onLogout }) {
     rangeChanged();
   }
   function renderDates() {
-    $("dateFrom").value = Time.pickerDate(picked.from);
-    $("dateTo").value = Time.pickerDate(picked.to);
-    // Phones show the range as one compact button ("Oct 18 – 24") that opens the date fields.
-    const [fm, fd] = Time.shortDay(picked.from).split(" "), [tm, td] = Time.shortDay(picked.to).split(" ");
-    $("rangeText").textContent = fm === tm ? `${fm} ${fd} – ${td}` : `${fm} ${fd} – ${tm} ${td}`;
     // This Week is greyed out while the current week is already showing.
     $("thisWeek").disabled = isDefaultRange();
   }
@@ -134,8 +129,6 @@ function startApp({ apiKey, onLogout }) {
   });
   $("prevWeek").addEventListener("click", () => showWeekOf(Time.addDays(picked.from, -7)));
   $("nextWeek").addEventListener("click", () => showWeekOf(Time.addDays(picked.from, 7)));
-  // The date fields only show the week (read-only, like a non-editable JavaFX DatePicker
-  // with its calendar button hidden): there are no custom ranges, only ‹ › and This Week.
   // The Countries and time zone dropdowns never highlight when clicked.
   // Reached with Tab, they get a faint border (kbd-focus) so keyboard focus stays visible.
   let keyboardNav = false;
@@ -283,19 +276,6 @@ function startApp({ apiKey, onLogout }) {
   q.addEventListener("input", () => { state.q = q.value; qClear.hidden = !q.value; render(); });
   q.addEventListener("keydown", e => { if (e.key === "Escape" && q.value) { e.preventDefault(); setQuery(""); } });
   qClear.addEventListener("click", () => { setQuery(""); q.focus(); });
-  // Phones: the date fields open from the compact range button.
-  $("rangeBtn").addEventListener("click", () => {
-    const open = !$("topbar").classList.contains("show-dates");
-    $("topbar").classList.toggle("show-dates", open);
-    $("rangeBtn").setAttribute("aria-expanded", open);
-  });
-  // Phones: search hides behind an icon to save a row of the top bar.
-  $("searchToggle").addEventListener("click", () => {
-    const open = !$("topbar").classList.contains("show-search");
-    $("topbar").classList.toggle("show-search", open);
-    $("searchToggle").setAttribute("aria-expanded", open);
-    if (open) q.focus();
-  });
   // Phones: date headers stick just below the sticky top bar, so track its height.
   if ("ResizeObserver" in window) {
     new ResizeObserver(() => document.documentElement.style.setProperty("--topbar-h", $("topbar").getBoundingClientRect().height + "px")).observe($("topbar"));
@@ -398,7 +378,6 @@ function startApp({ apiKey, onLogout }) {
   function render() {
     typeDD.render(); impactDD.render();
     renderCountryPreset();
-    $("searchToggle").classList.toggle("has-query", !!state.q.trim());
     renderDates();
     renderDayTabs();
     renderActive(renderTable());

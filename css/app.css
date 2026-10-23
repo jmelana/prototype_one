@@ -177,6 +177,15 @@ h1 { font-size: 20px; font-weight: 600; letter-spacing: -.01em; margin: 0; }
 .tb-dates .tb-arrow:disabled, .tb-dates .tb-btn:disabled { opacity: .45; cursor: not-allowed; }
 .tb-dates .tb-btn:disabled:hover { background: var(--control); }
 
+/* Week bar: ‹ day tabs › (the arrows move a week at a time) */
+.weekbar { display: flex; align-items: stretch; gap: 6px; }
+.weekbar .daytabs { flex: 1; min-width: 0; margin-top: 0; }
+/* ‹ › as real Buttons, as tall as the day bar and styled like it, so they read as navigation */
+.weekbar .tb-arrow { height: auto; width: 36px; border: 1px solid var(--btn-border); border-radius: 3px; color: var(--fg);
+  background: linear-gradient(var(--btn-top), var(--btn-bot)); box-shadow: inset 0 1px 0 var(--btn-hi); }
+.weekbar .tb-arrow:hover { background: linear-gradient(var(--btn-hover-top), var(--btn-hover-bot)); }
+.weekbar .tb-arrow:active { background: linear-gradient(var(--btn-press-top), var(--btn-press-bot)); box-shadow: inset 0 1px 2px rgba(0, 0, 0, .35); }
+.weekbar .tb-arrow .ico { width: 20px; height: 20px; stroke-width: 2.5; }
 /* Day tabs: Week, then one tab per day of the range */
 .daytabs { display: flex; gap: 2px; margin-top: 10px; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px;
   overflow-x: auto; scrollbar-width: none; overscroll-behavior-x: contain; }
@@ -224,7 +233,7 @@ h1 { font-size: 20px; font-weight: 600; letter-spacing: -.01em; margin: 0; }
 .dd-empty { padding: 12px; color: var(--muted); font-size: 13px; }
 
 /* ---- Status bar: count, active filter chips, filters ---------------------- */
-.statusbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 44px 2px 14px; min-height: 26px; }
+.statusbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 24px 2px 14px; min-height: 26px; }
 .count { font-size: 13px; color: var(--muted); white-space: nowrap; }
 .count b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
 .active { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1; min-width: 0; }

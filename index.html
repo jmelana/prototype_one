@@ -50,23 +50,13 @@
 
   <!-- .topbar only matters on phones (sticky bar); on desktop it's display: contents -->
   <div class="topbar" id="topbar">
-  <section class="toolbar" aria-label="Filters">
-    <div class="tb-left">
-      <div class="tb-dates" id="dates" role="group" aria-label="Date range">
-        <button type="button" id="prevWeek" class="tb-arrow" aria-label="Previous week" title="Previous week"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
-        <button type="button" id="rangeBtn" class="tb-btn tb-rangebtn" aria-expanded="false" aria-label="Change dates"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span id="rangeText"></span></button>
-        <label class="tb-btn tb-datebox" id="dateFromBox"><input type="text" id="dateFrom" class="tb-date" aria-label="Week starts" readonly tabindex="-1"></label>
-        <span class="tb-dash" aria-hidden="true">–</span>
-        <label class="tb-btn tb-datebox" id="dateToBox"><input type="text" id="dateTo" class="tb-date" aria-label="Week ends" readonly tabindex="-1"></label>
-        <button type="button" id="nextWeek" class="tb-arrow" aria-label="Next week" title="Next week"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
-      </div>
-    </div>
-    <div class="tb-right">
-      <button type="button" id="searchToggle" class="tb-btn icon-only tb-searchbtn" aria-label="Search events" aria-expanded="false" aria-controls="q"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></button>
-    </div>
-  </section>
 
-  <div class="daytabs" id="daytabs" role="group" aria-label="Day" hidden></div>
+  <!-- Week bar: ‹ previous week, the day tabs, › next week -->
+  <div class="weekbar">
+    <button type="button" id="prevWeek" class="tb-arrow" aria-label="Previous week" title="Previous week"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m15 18-6-6 6-6"/></svg></button>
+    <div class="daytabs" id="daytabs" role="group" aria-label="Day" hidden></div>
+    <button type="button" id="nextWeek" class="tb-arrow" aria-label="Next week" title="Next week"><svg class="ico" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg></button>
+  </div>
   </div>
 
   <div class="statusbar">
