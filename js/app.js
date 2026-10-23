@@ -111,7 +111,12 @@ function startApp({ apiKey, onLogout }) {
     const tab = (key, label, count, cls = "", extra = "", aria = label) =>
       `<button type="button" class="daytab${cls}" data-day="${key}" aria-pressed="${(key || null) === (sel || null)}" aria-label="${esc(aria)}: ${n(count)}">
         <span class="dt-day">${label}${extra}</span><span class="dt-n">${n(count)}</span></button>`;
-    let html = tab("", "Week", total, " week", "", "Whole range");
+    // The Week box names the week: "Oct 18 – 24, 2026", "Oct 25 – Nov 1, 2026" or
+    // "Dec 27, 2026 – Jan 2, 2027", so the dates shown are always clear.
+    const [fy, ty] = [picked.from.slice(0, 4), picked.to.slice(0, 4)];
+    const [fm, fd] = Time.shortDay(picked.from).split(" "), [tm, td] = Time.shortDay(picked.to).split(" ");
+    const range = fy !== ty ? `${fm} ${fd}, ${fy} – ${tm} ${td}, ${ty}` : fm === tm ? `${fm} ${fd} – ${td}, ${fy}` : `${fm} ${fd} – ${tm} ${td}, ${fy}`;
+    let html = tab("", range, total, " week", "", `Whole week, ${range}`);
     for (let i = 0; i < days; i++) {
       const k = Time.addDays(picked.from, i);
       html += tab(k, Time.tabDay(k), counts.get(k) || 0, k < t ? " is-past" : "",
