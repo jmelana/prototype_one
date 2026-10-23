@@ -160,29 +160,20 @@ h1 { font-size: 20px; font-weight: 600; letter-spacing: -.01em; margin: 0; }
 .icon-only[aria-expanded="true"] { background: var(--accent-soft); border-color: var(--accent); }
 .icon-only[aria-expanded="true"] .ico { color: var(--accent-text); }
 
-/* Date range: Today ‹ [from] – [to] › */
+/* Date range: ‹ [from] – [to] › */
 .tb-dates { display: flex; align-items: center; gap: 4px; }
-/* Date box, like a JavaFX DatePicker: an editable date in the locale's short format,
-   then the calendar button. A hidden browser date input supplies the pop-up calendar. */
-.tb-datebox { position: relative; padding: 0 8px; gap: 6px; cursor: text; }
-.tb-datebox:hover { background: var(--control); }
-.tb-datebox.kbd-focus { border-color: var(--muted); } /* faint cue for keyboard users only */
+/* Date box: the week's first or last day in the locale's short format. Read-only (a
+   non-editable JavaFX DatePicker with its calendar button hidden); ‹ › change the week. */
+.tb-datebox { position: relative; padding: 0 8px; gap: 6px; cursor: default; }
 .tb-date { width: 90px; height: 30px; padding: 0; border: 0; background: transparent; color: var(--fg); font: inherit; font-size: 13px; font-weight: 400; font-variant-numeric: tabular-nums; } /* regular, like a JavaFX DatePicker editor */
 .tb-date:focus, .tb-date:focus-visible { outline: none; }
-.tb-native { position: absolute; left: 0; bottom: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; pointer-events: none; }
-.tb-calbtn { cursor: pointer; }
-.tb-cal { color: var(--muted); opacity: .8; }
-.tb-datebox:has(:disabled) { opacity: .45; cursor: not-allowed; }
-.tb-datebox:has(:disabled) * { cursor: not-allowed; }
+.tb-date { cursor: default; pointer-events: none; }
 .tb-dash { color: var(--muted); }
-/* ‹ › ↺: plain clickable icons hugging the date fields, no box */
+/* ‹ ›: plain clickable icons hugging the date fields, no box */
 .tb-arrow { display: inline-grid; place-items: center; width: 18px; height: 32px; padding: 0; border: 0; border-radius: 4px; background: none; color: var(--muted); cursor: pointer; }
 .tb-arrow:hover:not(:disabled) { color: var(--fg); }
 .tb-arrow .ico { width: 16px; height: 16px; }
 #prevWeek { margin-left: 2px; }
-.tb-reset { width: 22px; }
-.tb-reset .ico { width: 14px; height: 14px; }
-.tb-reset:not(.is-away) { visibility: hidden; } /* keeps its space so the toolbar doesn't shift */
 .tb-dates .tb-arrow:disabled, .tb-dates .tb-btn:disabled { opacity: .45; cursor: not-allowed; }
 .tb-dates .tb-btn:disabled:hover { background: var(--control); }
 
@@ -233,7 +224,7 @@ h1 { font-size: 20px; font-weight: 600; letter-spacing: -.01em; margin: 0; }
 .dd-empty { padding: 12px; color: var(--muted); font-size: 13px; }
 
 /* ---- Status bar: count, active filter chips, filters ---------------------- */
-.statusbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 44px 2px 8px; min-height: 26px; }
+.statusbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 44px 2px 14px; min-height: 26px; }
 .count { font-size: 13px; color: var(--muted); white-space: nowrap; }
 .count b { color: var(--fg); font-weight: 600; font-variant-numeric: tabular-nums; }
 .active { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; flex: 1; min-width: 0; }
@@ -241,8 +232,18 @@ h1 { font-size: 20px; font-weight: 600; letter-spacing: -.01em; margin: 0; }
 .statusbar { font-size: 12.5px; color: var(--muted); }
 .statusbar > .active { flex: 0 1 auto; }
 .statusbar > .source { margin-left: auto; }
-.sb-refresh { margin-left: auto; font-size: 12.5px; }
-.source.is-warn + .sb-refresh { margin-left: 0; }
+/* This Week: a Button like the old Today one, greyed out while this week is showing */
+.statusbar > #thisWeek { margin-left: auto; height: 28px; padding: 0 12px; font-size: 12.5px; }
+.source.is-warn + #thisWeek { margin-left: 0; }
+.statusbar > #thisWeek:disabled { opacity: .45; cursor: default; }
+.statusbar > .search input { width: 220px; height: 28px; font-size: 12.5px; }
+.statusbar > #refreshBtn { margin-left: -6px; }
+/* Refresh (after the search box): spins while loading, dims while resting */
+#refreshBtn.is-busy .ico { animation: spin .8s linear infinite; }
+#refreshBtn:disabled:not(.is-busy) { opacity: .45; cursor: default; }
+#refreshBtn:disabled:hover { color: var(--muted); }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { #refreshBtn.is-busy .ico { animation-duration: 2.4s; } }
 /* Impact, Categories: plain text dropdowns like the time zone (grey label,
    bold value, small ▾; the value tints on hover). In JavaFX: flat MenuButton/ChoiceBox. */
 .sb-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 18px; }
@@ -292,8 +293,10 @@ h1 { font-size: 20px; font-weight: 600; letter-spacing: -.01em; margin: 0; }
 /* ---- Table --------------------------------------------------------------- */
 .tablebox { background: var(--row); border: 1px solid var(--line); border-radius: 8px; overflow: auto; max-height: max(420px, calc(100dvh - 200px)); overscroll-behavior: contain; }
 table { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 960px; table-layout: fixed; }
-col.w-time { width: 76px; } col.w-ctry { width: 170px; } col.w-imp { width: 78px; } col.w-ev { width: auto; }
-col.w-num { width: 100px; } col.w-st { width: 136px; } col.w-alert { width: 60px; }
+/* Column widths are variables so the day headers' event counts can line up with the Event column */
+:root { --w-time: 76px; --w-ctry: 170px; --w-imp: 96px; }
+col.w-time { width: var(--w-time); } col.w-ctry { width: var(--w-ctry); } col.w-imp { width: var(--w-imp); } col.w-ev { width: auto; }
+col.w-num { width: 100px; } col.w-alert { width: 60px; }
 th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: middle; }
 thead th { position: sticky; top: 0; z-index: 2; background: var(--head); font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em;
   color: var(--fg); padding-block: 10px; border-bottom-color: var(--line-strong); white-space: nowrap; }
@@ -328,25 +331,14 @@ td.num.neg { color: var(--neg); }
 .imp-high i { background: var(--high); }
 .imp-txt { margin-left: 6px; font-size: 11.5px; color: var(--muted); align-self: center; }
 
-/* Status */
-.st { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 500; white-space: nowrap; font-variant-numeric: tabular-nums; }
-.st-upcoming { color: var(--amber); background: var(--amber-bg); }
-.st-released { color: var(--released); background: var(--released-bg); }
-.st-awaiting { color: var(--amber); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--amber) 45%, transparent); }
-.st-past, .st-holiday { color: var(--faint); padding-inline: 0; }
+/* Finished events (released, or past with no value) grey their time */
 tr[data-status="released"] .c-time, tr[data-status="past"] .c-time { color: var(--muted); }
 
 /* Alert bell */
 .bell { position: relative; display: inline-grid; place-items: center; width: 30px; height: 28px; border: 0; border-radius: 6px; background: none; color: var(--faint); }
-.bell:hover:not(:disabled) { background: var(--panel-2); }
-.bell-none:hover:not(:disabled), .bell-acknowledged:hover { color: var(--fg); } /* armed/triggered keep their yellow */
-.bell:disabled { opacity: .35; cursor: not-allowed; }
-.bell-armed { color: var(--alert-edge); } /* filled yellow */
-.bell-triggered { color: var(--alert-edge); background: color-mix(in srgb, var(--alert-edge) 18%, transparent); }
-.bell-triggered .ico { animation: ring .9s ease-in-out 3; transform-origin: 50% 10%; }
-.bell-acknowledged { color: var(--muted); }
-.bell-ack { position: absolute; right: 2px; bottom: 2px; display: grid; place-items: center; width: 12px; height: 12px; border-radius: 50%; background: var(--accent); color: var(--accent-fg); }
-.bell-ack .ico { width: 9px; height: 9px; stroke-width: 3.5; }
+.bell:hover { background: var(--panel-2); }
+.bell-armed { color: var(--alert-edge); } /* alert set: filled yellow */
+.bell-triggered, .bell-acknowledged { color: var(--faint); } /* went off: filled grey, the outline's colour */
 @keyframes ring { 0%, 100% { transform: rotate(0); } 20% { transform: rotate(14deg); } 40% { transform: rotate(-12deg); } 60% { transform: rotate(8deg); } 80% { transform: rotate(-4deg); } }
 
 /* Triggered alert row stays highlighted until acknowledged */
@@ -438,6 +430,14 @@ tbody tr[data-alert="triggered"] td:first-child { box-shadow: inset 3px 0 0 var(
 .lead-row input[aria-invalid="true"] { border-color: var(--danger); }
 .lead-suffix { font-size: 13px; color: var(--muted); }
 .check { display: flex; align-items: center; gap: 9px; font-size: 13px; cursor: pointer; margin-bottom: 6px; }
+/* Alerts tab: on/off switch, then the rule (dimmed while alerts are off) */
+.alert-switch { font-size: 13.5px; margin-bottom: 4px; }
+.alert-rule { margin: 0 0 6px; padding: 0; border: 0; min-width: 0; }
+.alert-rule.is-off { opacity: .6; }
+.alert-rule legend { padding: 0; }
+.rule-checks { display: flex; flex-wrap: wrap; gap: 4px 18px; }
+.rule-cats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px 18px; }
+.rule-countries.ctree { max-height: 220px; }
 .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 10px; }
 .stats div { padding: 8px 10px; border: 1px solid var(--line); border-radius: 6px; }
 .stats dt { font-size: 11.5px; color: var(--muted); }
@@ -481,9 +481,6 @@ tbody tr[data-alert="triggered"] td:first-child { box-shadow: inset 3px 0 0 var(
 .btn.primary { background: linear-gradient(var(--def-top), var(--def-bot)); border-color: var(--def-border); color: var(--accent-fg); }
 .btn.primary { box-shadow: inset 0 1px 0 rgba(255, 255, 255, .14); }
 .btn.primary:hover { background: linear-gradient(color-mix(in srgb, var(--def-top) 88%, white), color-mix(in srgb, var(--def-bot) 88%, white)); filter: none; }
-/* Selected ToggleButton (Today): Modena's pressed-in grey, with the text in the accent colour */
-#todayBtn[aria-pressed="true"], #todayBtn[aria-pressed="true"]:hover {
-  background: linear-gradient(var(--btn-press-top), var(--btn-press-bot)); border-color: var(--btn-border); box-shadow: inset 0 1px 2px rgba(0, 0, 0, .35); color: var(--accent-text); }
 .btn.danger { background: linear-gradient(color-mix(in srgb, var(--danger) 85%, white), var(--danger)); border-color: color-mix(in srgb, var(--danger) 70%, black); }
 .ico.arrow { width: 8px; height: 5px; color: var(--muted); margin-left: 2px; }
 
@@ -499,10 +496,7 @@ tbody tr[data-alert="triggered"] td:first-child { box-shadow: inset 3px 0 0 var(
   border-color: var(--focus); box-shadow: inset 0 1px 2px var(--field-shadow), 0 0 0 2px color-mix(in srgb, var(--focus) 35%, transparent); }
 
 /* DatePicker: text field plus a calendar button. Never highlights on hover/click. */
-.tb-datebox, .tb-datebox:hover { padding: 0 0 0 8px; gap: 8px; border-color: var(--field-border); background: var(--field); box-shadow: inset 0 1px 2px var(--field-shadow); }
-.tb-calbtn { align-self: stretch; display: grid; place-items: center; width: 26px; border-left: 1px solid var(--btn-border); border-radius: 0 2px 2px 0;
-  background: linear-gradient(var(--btn-top), var(--btn-bot)); }
-.tb-calbtn .tb-cal { opacity: 1; }
+.tb-datebox, .tb-datebox:hover { padding: 0 10px; gap: 8px; border-color: var(--field-border); background: var(--field); box-shadow: inset 0 1px 2px var(--field-shadow); }
 
 /* ChoiceBox (Holidays), ComboBox (time zone, settings): triangle arrow */
 .tz-pick select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5' viewBox='0 0 8 5'%3E%3Cpath d='M0 0h8L4 5z' fill='%23a6a6a6'/%3E%3C/svg%3E"); background-position: right 3px center; }
@@ -568,7 +562,13 @@ tbody tr[data-alert="triggered"]:hover td { background: color-mix(in srgb, var(-
 .day-toggle[aria-expanded="false"] .ico.arrow { transform: rotate(-90deg); }
 .day-toggle:hover .ico.arrow { color: var(--fg); }
 .day-toggle .day-tag { margin-left: 0; }
-.day-n { margin-left: auto; font-size: 12px; font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+.day-n { font-size: 12px; font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* The count sits in the Impact column, right-aligned so it ends at that column's
+   right edge (less the 8px cell padding) */
+@media (min-width: 561px) {
+  tr.day th { position: relative; }
+  .day-n { position: absolute; left: calc(var(--w-time) + var(--w-ctry) + var(--w-imp) - 8px); top: 50%; transform: translate(-100%, -50%); white-space: nowrap; }
+}
 
 /* ScrollBar */
 ::-webkit-scrollbar { width: 12px; height: 12px; }
@@ -631,22 +631,19 @@ tbody tr[data-alert="triggered"]:hover td { background: color-mix(in srgb, var(-
   .toolbar, .toolbar:hover { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 6px; padding: 0; background: none; border: 0; border-radius: 0; }
   .tb-left, .tb-right, .tb-dates { display: contents; }
   /* Row 1: ‹ [Oct 19 – 25] › ↺ … search, settings */
-  #prevWeek, .tb-rangebtn, #nextWeek, #thisWeek, .tb-searchbtn { order: 1; }
+  #prevWeek, .tb-rangebtn, #nextWeek, .tb-searchbtn { order: 1; }
   .tb-btn.tb-rangebtn { display: inline-flex; flex: 1 1 auto; min-width: 0; justify-content: center; font-weight: 600; }
   .tb-rangebtn[aria-expanded="true"] { background: var(--control-hover); }
   .tb-rangebtn span { overflow: hidden; text-overflow: ellipsis; }
   .tb-btn.tb-searchbtn { display: inline-flex; }
   .tb-searchbtn.has-query::after { content: ""; position: absolute; top: 7px; right: 7px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent-text); }
   .tb-searchbtn[aria-expanded="true"] { background: var(--control-hover); }
-  .tb-reset:not(.is-away) { display: none; }
   .tb-dates::after { content: ""; order: 2; flex-basis: 100%; }
   /* Row 1b (opened from the range button): the two date fields, full width */
   #dateFromBox, .tb-dash, #dateToBox { order: 3; display: none; }
   .tb-left::before { content: ""; order: 4; flex-basis: 100%; display: none; }
   .topbar.show-dates #dateFromBox, .topbar.show-dates #dateToBox { display: flex; }
   .topbar.show-dates .tb-dash, .topbar.show-dates .tb-left::before { display: block; }
-  /* Row 2: Today (Countries, Holidays, Impact, Categories sit in the line above the table) */
-  #todayBtn { order: 5; }
   /* Row 3 (only while searching): full-width search */
   .search { order: 7; flex: 1 1 100%; display: none; }
   .topbar.show-search .search, .search:has(input:not(:placeholder-shown)) { display: flex; }
@@ -660,14 +657,12 @@ tbody tr[data-alert="triggered"]:hover td { background: color-mix(in srgb, var(-
   .icon-only { width: 40px; padding: 0; }
   .btn { height: 44px; border-radius: 10px; font-size: 15px; }
   .btn.sm { height: 36px; }
-  .btn.primary, .btn.primary:hover, #todayBtn[aria-pressed="true"] {
+  .btn.primary, .btn.primary:hover {
     background: var(--accent); border-color: transparent; box-shadow: none; color: var(--accent-fg); }
   .tb-arrow { width: 30px; height: 40px; }
   .tb-arrow .ico { width: 20px; height: 20px; }
-  .tb-reset .ico { width: 17px; height: 17px; }
   .tb-datebox, .tb-datebox:hover { flex: 1 1 0; min-width: 0; height: 40px; padding: 0 10px; border-color: transparent; border-radius: 10px; background: var(--control); box-shadow: none; }
   .tb-date { flex: 1; width: 100%; min-width: 0; height: 38px; font-size: 14px; }
-  .tb-calbtn { display: none; }
   .search input, .field input[type=text], .field input[type=search], .field input[type=password], .lead-row input, .lead-row select, .set-select, .modal-search input {
     height: 44px; border-radius: 10px; font-size: 16px; box-shadow: none; } /* 16px stops iOS zooming in */
   .search input { padding-left: 38px; }
@@ -711,7 +706,6 @@ tbody tr[data-alert="triggered"]:hover td { background: color-mix(in srgb, var(-
   .cname { display: none; }
   .c-ev { order: 3; flex: 1 1 0; min-width: 0; }
   .ev-name { white-space: normal; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; font-size: 14px; }
-  .c-status { order: 4; }
   .c-alert { order: 5; margin: -6px -8px -6px 0; }
   .bell { width: 40px; height: 36px; }
   .c-imp { order: 7; width: 44px; }
