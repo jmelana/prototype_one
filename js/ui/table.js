@@ -14,7 +14,7 @@ class EventsTable {
   constructor(tbody, opts) {
     this.tbody = tbody;
     this.opts = opts;
-    this.rows = new Map(); // event id -> { tr, e, statusKey }
+    this.rows = new Map(); // event id -> { tr, e, state }
     this.todayKey = "";
     this.zone = "local";
     this.folds = new Map();     // "YYYY-MM-DD" -> folded? (user's choice)
@@ -23,7 +23,7 @@ class EventsTable {
       const t = e.target.closest(".day-toggle");
       if (t) return this.setDay(t, t.getAttribute("aria-expanded") === "true");
       const b = e.target.closest(".bell");
-      if (b && !b.disabled) {
+      if (b) {
         const r = this.rows.get(b.closest("tr").dataset.id);
         if (r) opts.onBell(r.e);
       }
@@ -43,8 +43,6 @@ class EventsTable {
   }
 
   static COLS = 8;
-  // Alerts are for anything not yet released: upcoming events, and data releases
-  // past their time whose actual hasn't arrived. Past speeches/holidays never "release".
   static IMPACT_SHORT = { high: "High", medium: "Med", low: "Low" };
 
   // events: already filtered; emptyHtml shown when there are none.
@@ -83,21 +81,21 @@ class EventsTable {
     const byId = new Map(events.map(e => [e.id, e]));
     for (const tr of this.tbody.querySelectorAll("tr[data-id]")) {
       const e = byId.get(tr.dataset.id);
-      this.rows.set(e.id, { tr, e, statusKey: Events.status(e, now).label });
+      this.rows.set(e.id, { tr, e, state: tr.dataset.status });
     }
   }
 
   rowHtml(e, now, alt = false, day = "", folded = false) {
-    const st = Events.status(e, now);
     const impactName = e.impact[0].toUpperCase() + e.impact.slice(1);
-    return `<tr${alt ? ` class="alt"` : ""} data-id="${esc(e.id)}" data-day="${day}"${folded ? " hidden" : ""} data-status="${st.kind}" data-alert="${this.opts.alerts.stateOf(e.id)}">
+    const verdict = Directions.verdict(e); // "better" | "worse" | null, shown by the Indicator style
+    return `<tr${alt ? ` class="alt"` : ""} data-id="${esc(e.id)}" data-day="${day}"${folded ? " hidden" : ""} data-status="${Events.releaseState(e, now)}" data-alert="${this.opts.alerts.stateOf(e.id)}">
       <td class="c-time">${e.holiday ? `<span class="allday">All day</span>` : Time.time(e.d, this.zone)}</td>
       <td class="c-ctry" title="${esc(e.name)}">${Countries.flag(e.country)}<span class="cname">${esc(e.name)}</span></td>
       <td class="c-imp"><span class="imp imp-${e.impact}" title="${impactName} impact" role="img" aria-label="${impactName} impact">${"<i></i>".repeat(3)}<span class="imp-txt" aria-hidden="true">${EventsTable.IMPACT_SHORT[e.impact]}</span></span></td>
       <td class="c-ev"><span class="ev-name${e.holiday ? " hol" : ""}" title="${esc(e.event)} · ${esc(e.type)}">${esc(e.event)}</span></td>
-      <td class="num c-act${signClass(e.actual)}">${fmtVal(e.actual, e.unit)}</td>
+      <td class="num c-act${signClass(e.actual)}${verdict ? " " + verdict : ""}"${verdict ? ` title="${verdictTitle(e, verdict)}"` : ""}><span class="val">${fmtVal(e.actual, e.unit)}</span></td>
       <td class="num c-fc">${fmtVal(e.estimate, e.unit)}</td>
-      <td class="num c-prev${signClass(e.prev)}">${fmtVal(e.prev, e.unit)}</td>
+      <td class="num c-prev${signClass(e.prev)}"><span class="val">${fmtVal(e.prev, e.unit)}</span></td>
       <td class="c-alert">${this.bellHtml(e, now)}</td>
     </tr>`;
   }
@@ -120,10 +118,9 @@ class EventsTable {
   tick(now) {
     if (this.rows.size && Time.dayKey(new Date(now), this.zone) !== this.todayKey) return true;
     for (const r of this.rows.values()) {
-      const st = Events.status(r.e, now);
-      if (st.label === r.statusKey) continue;
-      r.statusKey = st.label;
-      r.tr.dataset.status = st.kind;
+      const state = Events.releaseState(r.e, now);
+      if (state === r.state) continue;
+      r.state = r.tr.dataset.status = state;
     }
     return false;
   }
@@ -138,12 +135,14 @@ class EventsTable {
       if (hadFocus) r.tr.querySelector(".bell").focus();
     }
   }
-
-  rowFor(id) { const r = this.rows.get(id); return r ? r.tr : null; }
 }
 
-// Green for positive, red for negative (Actual and Previous).
+// Positive / negative classes for Actual and Previous; the colors and style come from Settings → Display.
 const signClass = v => (v == null || !Number(v) ? "" : Number(v) > 0 ? " pos" : " neg");
+
+// Tooltip on a filled Actual cell, saying which way counts as better for the report.
+const verdictTitle = (e, v) =>
+  `${v === "better" ? "Better" : "Worse"} than forecast (${e.direction === "higher" ? "higher" : "lower"} is better for this report)`;
 
 function fmtVal(v, unit) {
   if (v == null) return '<span class="dash" aria-label="Not available">—</span>';

@@ -3,7 +3,8 @@
 //   new SettingsPanel(el, {
 //     groups, alerts,                      CountryGroups / Alerts instances
 //     countries: () => [code],             every country the user can pick
-//     valueColors: { get() -> { mode: "bluepink" | "greenred" | "custom", pos?, neg? }, set(value), current() -> { pos, neg } },
+//     valueColors: { get() -> { mode: "bluepink" | "greenred" | "custom", pos?, neg? }, set(value), current() -> { pos, neg },
+//                    style() -> "text" | "indicator", setStyle(value) },
 //     timezone: { options(selectedId) -> <option> HTML, get(), set(id) },
 //     theme: { get() -> "dark" | "light" | "system", set(value) },
 //     onClose(),
@@ -331,7 +332,41 @@ class SettingsPanel {
     p.querySelector(`[name=vc][value="${vc.mode}"]`).checked = true;
     p.querySelector("[name=posColor]").value = now.pos;
     p.querySelector("[name=negColor]").value = now.neg;
+    const style = this.opts.valueColors.style();
+    p.querySelector(`[name=vstyle][value="${style}"]`).checked = true;
+    this.renderValueStyle(style);
     this.showHex();
+    this.showContrastWarning();
+  }
+
+  // Explainer, color labels and preview for "Text color" or "Indicator".
+  renderValueStyle(style) {
+    const p = this.panes.display, ind = style === "indicator";
+    p.querySelector("[data-vstyle-desc]").textContent = ind
+      ? "Fills the Actual cell when it beats or misses the forecast, from the currency's point of view. For example, a higher Unemployment Rate is worse, and higher inflation is better (it makes higher interest rates likely). Releases without a forecast aren't filled."
+      : "Positive numbers in the Actual and Previous columns use the positive color, and negative numbers the negative color.";
+    const [pos, neg] = ind ? ["Better than forecast", "Worse than forecast"] : ["Positive", "Negative"];
+    p.querySelector("[data-pos-label]").textContent = pos;
+    p.querySelector("[data-neg-label]").textContent = neg;
+    p.querySelector("[name=posColor]").setAttribute("aria-label", `${pos} color`);
+    p.querySelector("[name=negColor]").setAttribute("aria-label", `${neg} color`);
+    p.querySelector(".vc-preview").innerHTML = ind
+      ? `<span>Preview</span><span class="vc-pos">3.7%</span><span>better than forecast</span><span class="vc-neg">1.4%</span><span>worse than forecast</span>`
+      : `<span>Preview</span><span class="vc-pos">3.7%</span><span class="vc-neg">-1.4%</span><span class="vc-pos">250</span><span class="vc-neg">-0.448</span>`;
+  }
+
+  // Text color style only (Indicator picks readable text itself): warn when a color is
+  // hard to read on the table's row backgrounds in the current theme. The color is kept.
+  showContrastWarning() {
+    const p = this.panes.display, warn = p.querySelector(".vc-warn");
+    const cs = getComputedStyle(document.documentElement), rows = ["--row", "--row-alt"].map(v => cs.getPropertyValue(v).trim());
+    const { pos, neg } = this.opts.valueColors.current();
+    const bad = this.opts.valueColors.style() === "text"
+      ? [["Positive", pos], ["Negative", neg]].filter(([, c]) => !Colors.readable(c, rows)).map(([name]) => name) : [];
+    warn.hidden = !bad.length;
+    if (!bad.length) return;
+    const which = bad.length === 2 ? "Positive and negative values are" : `${bad[0]} values are`;
+    warn.textContent = `${which} hard to read on the current background. Try a ${Colors.isDark(rows[0]) ? "lighter" : "darker"} color.`;
   }
 
   // Hex code beside each swatch, as on a JavaFX ColorPicker.
@@ -356,27 +391,33 @@ class SettingsPanel {
       <label class="field"><span class="field-label">Default time zone</span>
         <select name="defaultZone" class="set-select"></select></label>
       <p class="set-desc">Used whenever the calendar opens. The time zone above the table changes it for the current session only.</p>
-      <h3 class="set-h" id="vcLbl">Actual and previous values</h3>
-      <p class="set-desc">Colors for positive and negative numbers in the Actual and Previous columns.</p>
+      <h3 class="set-h">Actual and previous values</h3>
+      <span class="field-label" id="vsLbl">Show as</span>
+      <div class="vc-options" role="radiogroup" aria-labelledby="vsLbl">
+        <label class="check"><input type="radio" name="vstyle" value="text"> Text color</label>
+        <label class="check"><input type="radio" name="vstyle" value="indicator"> Indicator</label>
+      </div>
+      <p class="set-desc" data-vstyle-desc></p>
+      <span class="field-label" id="vcLbl">Colors</span>
       <div class="vc-options" role="radiogroup" aria-labelledby="vcLbl">
         <label class="check"><input type="radio" name="vc" value="bluepink"> Blue / pink</label>
         <label class="check"><input type="radio" name="vc" value="greenred"> Green / red</label>
         <label class="check"><input type="radio" name="vc" value="custom"> Custom</label>
       </div>
       <div class="vc-custom">
-        <label class="vc-color"><span class="vc-picker"><input type="color" name="posColor" aria-label="Positive value color"><span class="vc-hex" data-hex="posColor"></span></span> Positive</label>
-        <label class="vc-color"><span class="vc-picker"><input type="color" name="negColor" aria-label="Negative value color"><span class="vc-hex" data-hex="negColor"></span></span> Negative</label>
+        <label class="vc-color"><span class="vc-picker"><input type="color" name="posColor"><span class="vc-hex" data-hex="posColor"></span></span> <span data-pos-label></span></label>
+        <label class="vc-color"><span class="vc-picker"><input type="color" name="negColor"><span class="vc-hex" data-hex="negColor"></span></span> <span data-neg-label></span></label>
       </div>
-      <div class="vc-preview" aria-hidden="true">
-        <span>Preview</span><span class="vc-pos">3.7%</span><span class="vc-neg">-1.4%</span><span class="vc-pos">250</span><span class="vc-neg">-0.448</span>
-      </div>`;
+      <p class="vc-warn" role="status" hidden></p>
+      <div class="vc-preview" aria-hidden="true"></div>`;
     p.querySelector("[name=defaultZone]").addEventListener("change", e => this.opts.timezone.set(e.target.value));
     for (const r of p.querySelectorAll("[name=theme]")) r.addEventListener("change", e => {
       this.opts.theme.set(e.target.value);
       this.renderDisplay(); // value-color presets differ by theme, so refresh the swatches
     });
     const vc = this.opts.valueColors;
-    p.querySelector(".vc-options").addEventListener("change", e => {
+    for (const r of p.querySelectorAll("[name=vstyle]")) r.addEventListener("change", e => { vc.setStyle(e.target.value); this.renderDisplay(); });
+    p.querySelector('[aria-labelledby="vcLbl"]').addEventListener("change", e => {
       // Choosing Custom starts from the colors currently shown.
       vc.set(e.target.value === "custom" ? { mode: "custom", ...vc.current() } : { mode: e.target.value });
       this.renderDisplay();
@@ -385,6 +426,7 @@ class SettingsPanel {
     p.querySelector(".vc-custom").addEventListener("input", () => {
       vc.set({ mode: "custom", pos: p.querySelector("[name=posColor]").value, neg: p.querySelector("[name=negColor]").value });
       this.showHex();
+      this.showContrastWarning();
       p.querySelector('[name=vc][value="custom"]').checked = true;
     });
   }

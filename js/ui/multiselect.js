@@ -3,7 +3,7 @@
 // options are toggled; it closes on Escape, outside click or tabbing away.
 //
 //   new MultiSelect(mountEl, {
-//     label, icon,
+//     label,
 //     options:  () => [{ value, label, count, prefix?, sep? }],   sep: separator above it
 //     selected: () => Set | null      (null = all)
 //     onToggle(value), onAll(), onClear(),
@@ -17,7 +17,7 @@ class MultiSelect {
     mount.classList.add("dd");
     mount.innerHTML = `
       <button type="button" class="tb-btn" aria-haspopup="true" aria-expanded="false" aria-controls="${id}">
-        ${opts.icon || ""}<span class="tb-label">${esc(opts.label)}</span><span class="tb-value"></span>${Icons.arrow}
+        <span class="tb-label">${esc(opts.label)}</span><span class="tb-value"></span>${Icons.arrow}
       </button>
       <div class="dd-panel" id="${id}" role="group" aria-label="${esc(opts.label)}" hidden>
         <button type="button" class="menu-item" data-act="all">Select all</button>

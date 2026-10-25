@@ -8,35 +8,47 @@ function startApp({ apiKey, onLogout }) {
   const groups = CountryGroups.create();
   let events = [];
   let byId = new Map();
-  const alerts = Alerts.create({ isReleased: id => { const e = byId.get(id); return !!e && e.actual != null; } });
+  const alerts = Alerts.create();
   const state = Filters.initial();
   const prefs = Store.get("prefs", {}) || {};
-  // Saved default zone (older saves kept the last-used zone as `zone`).
-  let defaultZone = [prefs.defaultZone, prefs.zone].find(z => z && Time.isValid(z)) || "local";
+  // Saved default zone (Settings → Display); the title-line dropdown changes it per session.
+  let defaultZone = prefs.defaultZone && Time.isValid(prefs.defaultZone) ? prefs.defaultZone : "local";
   let zone = defaultZone;
   // Positive/negative colors for Actual and Previous (Settings → Display). The presets
   // have light-mode variants in the CSS; custom colors apply as picked in both themes.
   const hex = c => typeof c === "string" && /^#[0-9a-f]{6}$/i.test(c);
-  // Blue / pink is the default; older saves used "default" to mean green/red before it was.
+  // Blue / pink is the default.
   let valueColors = prefs.valueColors && (prefs.valueColors.mode === "greenred" ||
     (prefs.valueColors.mode === "custom" && hex(prefs.valueColors.pos) && hex(prefs.valueColors.neg)))
     ? prefs.valueColors : { mode: "bluepink" };
+  // How they're shown: "text" colors the number (default); "indicator" fills the cell
+  // with the color and picks white or dark text for it (--pos-ink / --neg-ink).
+  let valueStyle = prefs.valueStyle === "indicator" ? "indicator" : "text";
   function applyValueColors() {
     const root = document.documentElement, custom = valueColors.mode === "custom";
     if (valueColors.mode === "bluepink") root.dataset.values = "bluepink"; else delete root.dataset.values;
     if (custom) { root.style.setProperty("--pos", valueColors.pos); root.style.setProperty("--neg", valueColors.neg); }
     else { root.style.removeProperty("--pos"); root.style.removeProperty("--neg"); }
+    root.dataset.valueStyle = valueStyle;
+    applyInks();
   }
-  applyValueColors();
+  // Preset colors differ by theme, so this also runs after every theme change.
+  function applyInks() {
+    const root = document.documentElement, cs = getComputedStyle(root);
+    for (const k of ["pos", "neg"]) root.style.setProperty(`--${k}-ink`, Colors.ink(cs.getPropertyValue(`--${k}`)));
+  }
   // Theme (Settings → Display): "dark" (default), "light", or "system" to match the computer.
   let theme = ["dark", "light", "system"].includes(prefs.theme) ? prefs.theme : "dark";
   function applyTheme() {
     if (theme === "system") delete document.documentElement.dataset.theme;
     else document.documentElement.dataset.theme = theme;
+    applyInks();
   }
   applyTheme();
-  const savePrefs = () => Store.set("prefs", { defaultZone, valueColors, theme });
-  // Countries shown when the app opens and after "Clear all".
+  applyValueColors();
+  matchMedia("(prefers-color-scheme: light)").addEventListener("change", applyInks); // "Match my computer"
+  const savePrefs = () => Store.set("prefs", { defaultZone, valueColors, valueStyle, theme });
+  // Countries shown when the app opens and after Reset filters / "Clear all filters".
   const DEFAULT_GROUPS = ["g20"];
   state.groups = new Set(DEFAULT_GROUPS);
 
@@ -48,12 +60,12 @@ function startApp({ apiKey, onLogout }) {
     return c[zone] || (c[zone] = Time.dayKey(e.d, zone));
   }
 
-  // ---- Date range ----------------------------------------------------------------
+  // ---- Week ----------------------------------------------------------------------
   // Dates are calendar days in the displayed zone. The calendar always shows one week,
   // Sunday to Saturday (default: the current week). The ‹ › arrows either side of the
-  // day tabs move a week at a time and This Week jumps back. `day` narrows the table to one day of the week
-  // (a day tab) without changing the fields; null shows the whole week. state.range
-  // is what the table actually filters on.
+  // day tabs move a week at a time and This Week jumps back. `day` narrows the table to
+  // one day of the week (a day tab); null shows the whole week. state.range is what
+  // the table actually filters on.
   const today = () => Time.dayKey(new Date(), zone);
   function weekOf(key) {
     const sunday = Time.addDays(key, -new Date(key + "T12:00:00Z").getUTCDay()); // getUTCDay: 0 = Sunday
@@ -63,9 +75,8 @@ function startApp({ apiKey, onLogout }) {
   let picked = defaultRange();
   let shownWeek = defaultRange(); // the default as of the last day rollover
   let day = null;
-  const selectedDay = () => day;
   const isDefaultRange = () => { const d = defaultRange(); return picked.from === d.from && picked.to === d.to; };
-  const applyRange = () => { const k = selectedDay(); state.range = k ? { from: k, to: k } : { ...picked }; };
+  const applyRange = () => { state.range = day ? { from: day, to: day } : { ...picked }; };
   applyRange();
 
   function rangeChanged() { applyRange(); render(); ensureRangeLoaded(); }
@@ -74,16 +85,14 @@ function startApp({ apiKey, onLogout }) {
     day = !key || key === day ? null : key;
     rangeChanged();
   }
-  // Show the whole week containing `key` (from the date fields or the arrows).
+  // Show the whole week containing `key` (the ‹ › arrows).
   function showWeekOf(key) {
     picked = weekOf(key);
     day = null;
     rangeChanged();
   }
-  function renderDates() {
-    // This Week is greyed out while the current week is already showing.
-    $("thisWeek").disabled = isDefaultRange();
-  }
+  // This Week is greyed out while the current week is already showing.
+  function renderThisWeek() { $("thisWeek").disabled = isDefaultRange(); }
   // Back to Sunday–Saturday of this week, showing the whole week. Other filters stay.
   $("thisWeek").addEventListener("click", () => {
     picked = defaultRange(); day = null;
@@ -91,12 +100,11 @@ function startApp({ apiKey, onLogout }) {
     $("nextWeek").focus(); // This Week greys out, so keep focus somewhere useful
   });
 
-  // Day tabs: one per day of the picked range (2 to 7 days), plus "Week" for all of it.
-  // Counts reflect every other filter, and a red dot marks days with a high-impact release.
+  // Day tabs: the week (labelled with its dates), then one tab per day. Counts reflect
+  // every other filter, and a red dot marks days with a high-impact release.
   function renderDayTabs() {
     const box = $("daytabs");
-    const days = Time.daysBetween(picked.from, picked.to) + 1;
-    box.hidden = loading || days < 2 || days > 7;
+    box.hidden = loading;
     if (box.hidden) return;
     const counts = new Map(), high = new Set();
     for (const e of unavailable() ? [] : Filters.apply(events, { ...state, range: { ...picked } }, groups, dayOf)) {
@@ -107,7 +115,7 @@ function startApp({ apiKey, onLogout }) {
     const n = c => `${c.toLocaleString()} event${c === 1 ? "" : "s"}`;
     let total = 0;
     counts.forEach(c => { total += c; });
-    const t = today(), sel = selectedDay();
+    const t = today(), sel = day;
     const tab = (key, label, count, cls = "", extra = "", aria = label) =>
       `<button type="button" class="daytab${cls}" data-day="${key}" aria-pressed="${(key || null) === (sel || null)}" aria-label="${esc(aria)}: ${n(count)}">
         <span class="dt-day">${label}${extra}</span><span class="dt-n">${n(count)}</span></button>`;
@@ -117,7 +125,7 @@ function startApp({ apiKey, onLogout }) {
     const [fm, fd] = Time.shortDay(picked.from).split(" "), [tm, td] = Time.shortDay(picked.to).split(" ");
     const range = fy !== ty ? `${fm} ${fd}, ${fy} – ${tm} ${td}, ${ty}` : fm === tm ? `${fm} ${fd} – ${td}, ${fy}` : `${fm} ${fd} – ${tm} ${td}, ${fy}`;
     let html = tab("", range, total, " week", "", `Whole week, ${range}`);
-    for (let i = 0; i < days; i++) {
+    for (let i = 0; i < 7; i++) {
       const k = Time.addDays(picked.from, i);
       html += tab(k, Time.tabDay(k), counts.get(k) || 0, k < t ? " is-past" : "",
         (k === t ? ` <span class="dt-today">Today</span>` : "") + (high.has(k) ? `<span class="dt-hi" title="High-impact release"></span>` : ""),
@@ -168,23 +176,21 @@ function startApp({ apiKey, onLogout }) {
     return [...s];
   }
 
-  // ---- Toolbar -----------------------------------------------------------------
+  // ---- Filter menus ----------------------------------------------------------------
   const typeDD = new MultiSelect($("ddTypes"), {
-    label: "Categories", icon: Icons.list,
+    label: "Categories",
     options: typeOptions, selected: () => state.types,
     onToggle: v => { state.types = Filters.toggle(state.types, v, visibleTypes()); render(); },
     onAll: () => { state.types = null; render(); },
     onClear: () => { state.types = new Set(); render(); },
   });
   const impactDD = new MultiSelect($("ddImpact"), {
-    label: "Impact", icon: Icons.gauge,
+    label: "Impact",
     options: impactOptions, selected: () => state.impacts,
     onToggle: v => { state.impacts = Filters.toggle(state.impacts, v, Events.IMPACTS); render(); },
     onAll: () => { state.impacts = null; render(); },
     onClear: () => { state.impacts = new Set(); render(); },
   });
-
-
 
   // Countries dropdown, first on the filter line: one preset at a time (Entire world, a built-in
   // group or one of yours), or "Choose countries…" for individual countries without
@@ -232,7 +238,7 @@ function startApp({ apiKey, onLogout }) {
   $("countryDialog").addEventListener("close", () => { if (!settings.isOpen) $("countryPreset").focus(); });
 
   // ---- Time zone -------------------------------------------------------------------
-  // The status-bar dropdown changes the zone for this session. The default zone
+  // The title-line dropdown changes the zone for this session. The default zone
   // (Settings → Display) is saved and used whenever the app opens.
   function zoneOptionsHtml(selected) {
     const at = new Date(), byGroup = new Map();
@@ -262,7 +268,7 @@ function startApp({ apiKey, onLogout }) {
     if (wasDefault) picked = defaultRange(); // keep "this week" relative to the new zone
     shownWeek = defaultRange();
     buildZones();
-    renderZoneNote();
+    renderTimeHeaderTitle();
     rangeChanged();
   }
   $("tz").addEventListener("focus", () => buildZones()); // refresh offsets across DST changes
@@ -274,7 +280,7 @@ function startApp({ apiKey, onLogout }) {
     if (zone === "UTC") return "UTC";
     return `${z ? z.city : zone} time (${off})`;
   }
-  function renderZoneNote() { $("thTime").title = "Times in " + zoneText(); }
+  function renderTimeHeaderTitle() { $("thTime").title = "Times in " + zoneText(); }
 
   const q = $("q"), qClear = $("qClear");
   function setQuery(v) { q.value = v; state.q = v; qClear.hidden = !v; render(); }
@@ -293,6 +299,8 @@ function startApp({ apiKey, onLogout }) {
     valueColors: {
       get: () => valueColors,
       set: v => { valueColors = v; applyValueColors(); savePrefs(); },
+      style: () => valueStyle,
+      setStyle: v => { valueStyle = v === "indicator" ? "indicator" : "text"; applyValueColors(); savePrefs(); },
       current: () => {
         const cs = getComputedStyle(document.documentElement);
         return { pos: cs.getPropertyValue("--pos").trim(), neg: cs.getPropertyValue("--neg").trim() };
@@ -321,7 +329,7 @@ function startApp({ apiKey, onLogout }) {
   // ---- Reset filters ---------------------------------------------------------------
   // No chips: each dropdown already shows its value. A "Reset filters" link appears at
   // the start of the filter line whenever a filter differs from its default.
-  const filtersAreDefault = () => !state.q.trim() && !state.types && !state.impacts && state.holidays === "show" && !state.countries.size
+  const filtersAreDefault = () => !state.q.trim() && !state.types && !state.impacts && !state.countries.size
     && state.groups.size === DEFAULT_GROUPS.length && DEFAULT_GROUPS.every(g => state.groups.has(g));
   function renderActive(shown) {
     $("active").innerHTML = filtersAreDefault() ? ""
@@ -330,7 +338,7 @@ function startApp({ apiKey, onLogout }) {
     $("count").innerHTML = `<b>${shown.toLocaleString()}</b> of ${total.toLocaleString()} events`;
   }
   function resetFilters() {
-    Object.assign(state, { q: "", types: null, impacts: null, holidays: "show", groups: new Set(DEFAULT_GROUPS), countries: new Set() });
+    Object.assign(state, { q: "", types: null, impacts: null, groups: new Set(DEFAULT_GROUPS), countries: new Set() });
     q.value = ""; qClear.hidden = true;
   }
   function clearFilter(act) {
@@ -383,12 +391,12 @@ function startApp({ apiKey, onLogout }) {
   function render() {
     typeDD.render(); impactDD.render();
     renderCountryPreset();
-    renderDates();
+    renderThisWeek();
     renderDayTabs();
     renderActive(renderTable());
   }
 
-  // ---- Alerts: alarm window, notifications, title -------------------------------
+  // ---- Alerts: alarm window, screen-reader announcement, page title ---------------
   function alertText(id) {
     const e = byId.get(id), info = alerts.info(id) || {};
     const label = e ? `${e.name} · ${e.event}` : info.label || "Event";
@@ -445,9 +453,9 @@ function startApp({ apiKey, onLogout }) {
   document.addEventListener("visibilitychange", () => { if (!document.hidden) tick(); });
 
   // ---- Data loading --------------------------------------------------------------
-  // Live Finnhub data, refreshed every few minutes (and about a minute after each
-  // release, see scheduleReleasePoll) so actuals replace "Awaiting" and alerts
-  // waiting on a release fire. Every good response is also saved in this browser,
+  // Live Finnhub data, refreshed every few minutes and about a minute after each
+  // release (see scheduleReleasePoll), so actual values show up promptly. Every good
+  // response is also saved in this browser,
   // so the page opens instantly with the last data and, when the service can't be
   // reached, keeps showing it (labeled with when it was saved) while it retries.
   // mode: "live" (fetched this session), "saved" (from the local copy), "none".
@@ -485,7 +493,7 @@ function startApp({ apiKey, onLogout }) {
     byId = new Map(events.map(e => [e.id, e]));
     render();
     alerts.sync(events); // arm upcoming events that match the alert rule
-    alerts.check(); // window opened while the page was closed, or an awaited release is in
+    alerts.check(); // an alert window opened while the page was closed
     syncAlarm();    // alerts still unacknowledged from before a reload
   }
 
@@ -584,7 +592,7 @@ function startApp({ apiKey, onLogout }) {
   $("logout").addEventListener("click", () => { Store.set(CACHE_KEY, []); onLogout(); });
 
   buildZones();
-  renderZoneNote();
+  renderTimeHeaderTitle();
   const saved = fromCache(fetchWindow());
   if (saved) useCache(saved); // open with the last data straight away
   else render();              // empty table with the loading message
