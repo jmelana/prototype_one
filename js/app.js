@@ -24,6 +24,8 @@ function startApp({ apiKey, onLogout }) {
   // How they're shown: "text" colors the number (default); "indicator" fills the cell
   // with the color and picks white or dark text for it (--pos-ink / --neg-ink).
   let valueStyle = prefs.valueStyle === "indicator" ? "indicator" : "text";
+  // Indicator only: with no forecast, judge the actual against the previous value (default on).
+  let indicatorPrev = prefs.indicatorPrev !== false;
   function applyValueColors() {
     const root = document.documentElement, custom = valueColors.mode === "custom";
     if (valueColors.mode === "bluepink") root.dataset.values = "bluepink"; else delete root.dataset.values;
@@ -47,7 +49,7 @@ function startApp({ apiKey, onLogout }) {
   applyTheme();
   applyValueColors();
   matchMedia("(prefers-color-scheme: light)").addEventListener("change", applyInks); // "Match my computer"
-  const savePrefs = () => Store.set("prefs", { defaultZone, valueColors, valueStyle, theme });
+  const savePrefs = () => Store.set("prefs", { defaultZone, valueColors, valueStyle, indicatorPrev, theme });
   // Countries shown when the app opens and after Reset filters / "Clear all filters".
   const DEFAULT_GROUPS = ["g20"];
   state.groups = new Set(DEFAULT_GROUPS);
@@ -301,6 +303,8 @@ function startApp({ apiKey, onLogout }) {
       set: v => { valueColors = v; applyValueColors(); savePrefs(); },
       style: () => valueStyle,
       setStyle: v => { valueStyle = v === "indicator" ? "indicator" : "text"; applyValueColors(); savePrefs(); },
+      usePrevious: () => indicatorPrev,
+      setUsePrevious: on => { indicatorPrev = on; savePrefs(); render(); },
       current: () => {
         const cs = getComputedStyle(document.documentElement);
         return { pos: cs.getPropertyValue("--pos").trim(), neg: cs.getPropertyValue("--neg").trim() };
@@ -360,6 +364,7 @@ function startApp({ apiKey, onLogout }) {
   const table = new EventsTable($("rows"), {
     alerts,
     onBell: () => openSettings("alerts"), // bells only show state; the rule lives in Settings
+    usePrevious: () => indicatorPrev,
   });
 
   function emptyHtml() {
@@ -470,15 +475,21 @@ function startApp({ apiKey, onLogout }) {
     el.className = "source" + (kind ? " is-" + kind : "");
     el.textContent = text;
   }
-  // Local copy: the last few fetch windows, newest first. If storage is full, keep fewer.
+  // Testing only: which connection the data comes from, Finnhub (default) or the MotiveWave
+  // server (the switch in the top-right corner). Remembered across reloads.
+  let conn = Store.get("connection", "finnhub") === "motivewave" ? "motivewave" : "finnhub";
+  const fetchCalendar = win => conn === "motivewave" ? MotiveWave.fetchCalendar(win) : Finnhub.fetchCalendar(apiKey, win);
+  // Local copy: the last few fetch windows, newest first, each tagged with its connection
+  // so the two are never mixed. If storage is full, keep fewer.
   const CACHE_KEY = "calendarCache", CACHE_MAX = 4;
   const covers = (w, need) => !!w && w.from <= need.from && w.to >= need.to;
+  const connOf = c => c.conn || "finnhub"; // copies saved before the switch existed came from Finnhub
   function saveCache(win, text) {
-    const list = (Store.get(CACHE_KEY, []) || []).filter(c => c.from !== win.from || c.to !== win.to);
-    list.unshift({ from: win.from, to: win.to, savedAt: Date.now(), text });
+    const list = (Store.get(CACHE_KEY, []) || []).filter(c => c.from !== win.from || c.to !== win.to || connOf(c) !== conn);
+    list.unshift({ from: win.from, to: win.to, savedAt: Date.now(), conn, text });
     for (let n = Math.min(list.length, CACHE_MAX); n > 0 && !Store.set(CACHE_KEY, list.slice(0, n)); n--);
   }
-  const fromCache = need => (Store.get(CACHE_KEY, []) || []).find(c => covers(c, need)) || null;
+  const fromCache = need => (Store.get(CACHE_KEY, []) || []).find(c => connOf(c) === conn && covers(c, need)) || null;
   function useCache(c) {
     mode = "saved"; loaded = { from: c.from, to: c.to }; savedAt = c.savedAt;
     if (c.text !== lastRaw) { lastRaw = c.text; load(JSON.parse(c.text)); }
@@ -500,7 +511,7 @@ function startApp({ apiKey, onLogout }) {
   async function refreshLive() {
     const win = fetchWindow();
     try {
-      const text = await Finnhub.fetchCalendar(apiKey, win);
+      const text = await fetchCalendar(win);
       mode = "live"; loaded = win; offline = false;
       saveCache(win, text);
       if (text !== lastRaw) { lastRaw = text; load(JSON.parse(text)); } // skip re-render when unchanged
@@ -587,6 +598,27 @@ function startApp({ apiKey, onLogout }) {
     releaseDue = next;
     if (next !== Infinity) releaseTimer = setTimeout(() => { releaseDue = Infinity; refreshLive(); }, Math.min(next - now, 2 ** 31 - 1));
   }
+
+  // Switching connection drops what's loaded and fetches the week again from the other source
+  // (its own saved copy shows meanwhile, if there is one). Alerts and settings are kept.
+  function renderConn() {
+    for (const b of $("connToggle").querySelectorAll("[data-conn]")) b.setAttribute("aria-checked", String(b.dataset.conn === conn));
+  }
+  $("connToggle").addEventListener("click", e => {
+    const b = e.target.closest("[data-conn]");
+    if (!b || b.dataset.conn === conn) return;
+    conn = b.dataset.conn;
+    Store.set("connection", conn);
+    renderConn();
+    clearTimeout(rangeTimer);
+    mode = "none"; loaded = null; offline = false; lastRaw = ""; lastUpdated = "";
+    const c = fromCache(fetchWindow());
+    if (c) useCache(c); else { loading = true; render(); }
+    setSource(`Loading from ${b.textContent}…`);
+    renderRefresh();
+    startRefresh();
+  });
+  renderConn();
 
   // Logging out also removes the saved copy, so the data isn't readable without logging in.
   $("logout").addEventListener("click", () => { Store.set(CACHE_KEY, []); onLogout(); });

@@ -23,13 +23,21 @@ const Directions = (() => {
     return null;
   }
 
-  // "better" | "worse" | null for an event with an actual and a forecast.
-  function verdict(e) {
-    if (e.actual == null || e.estimate == null || !e.direction) return null;
-    const a = Number(e.actual), f = Number(e.estimate);
+  // What the actual is judged against: the forecast, or (when usePrevious is on and
+  // there's no forecast) the previous value. null when there's nothing to compare with.
+  function basis(e, usePrevious = false) {
+    if (e.estimate != null) return "forecast";
+    return usePrevious && e.prev != null ? "previous" : null;
+  }
+
+  // "better" | "worse" | null for an event with an actual and something to compare it with.
+  function verdict(e, usePrevious = false) {
+    const against = basis(e, usePrevious);
+    if (e.actual == null || !against || !e.direction) return null;
+    const a = Number(e.actual), f = Number(against === "forecast" ? e.estimate : e.prev);
     if (!Number.isFinite(a) || !Number.isFinite(f) || a === f) return null;
     return (a > f) === (e.direction === "higher") ? "better" : "worse";
   }
 
-  return { of, verdict };
+  return { of, basis, verdict };
 })();

@@ -9,7 +9,7 @@
 // (past days of the current week); once the user folds or unfolds a day, that
 // choice wins for the rest of the session.
 //
-//   new EventsTable(tbodyEl, { alerts, onBell(event) })
+//   new EventsTable(tbodyEl, { alerts, onBell(event), usePrevious() -> bool })
 class EventsTable {
   constructor(tbody, opts) {
     this.tbody = tbody;
@@ -43,7 +43,7 @@ class EventsTable {
   }
 
   static COLS = 8;
-  static IMPACT_SHORT = { high: "High", medium: "Med", low: "Low" };
+  static IMPACT_SHORT = { high: "HIGH", medium: "MED", low: "LOW" };
 
   // events: already filtered; emptyHtml shown when there are none.
   isFolded(day) { return this.folds.has(day) ? this.folds.get(day) : this.autoFold(day); }
@@ -87,13 +87,14 @@ class EventsTable {
 
   rowHtml(e, now, alt = false, day = "", folded = false) {
     const impactName = e.impact[0].toUpperCase() + e.impact.slice(1);
-    const verdict = Directions.verdict(e); // "better" | "worse" | null, shown by the Indicator style
+    const usePrev = this.opts.usePrevious();
+    const verdict = Directions.verdict(e, usePrev); // "better" | "worse" | null, shown by the Indicator style
     return `<tr${alt ? ` class="alt"` : ""} data-id="${esc(e.id)}" data-day="${day}"${folded ? " hidden" : ""} data-status="${Events.releaseState(e, now)}" data-alert="${this.opts.alerts.stateOf(e.id)}">
       <td class="c-time">${e.holiday ? `<span class="allday">All day</span>` : Time.time(e.d, this.zone)}</td>
+      <td class="c-imp"><span class="imp-chip imp-${e.impact}" title="${impactName} impact" aria-label="${impactName} impact">${EventsTable.IMPACT_SHORT[e.impact]}</span></td>
       <td class="c-ctry" title="${esc(e.name)}">${Countries.flag(e.country)}<span class="cname">${esc(e.name)}</span></td>
-      <td class="c-imp"><span class="imp imp-${e.impact}" title="${impactName} impact" role="img" aria-label="${impactName} impact">${"<i></i>".repeat(3)}<span class="imp-txt" aria-hidden="true">${EventsTable.IMPACT_SHORT[e.impact]}</span></span></td>
       <td class="c-ev"><span class="ev-name${e.holiday ? " hol" : ""}" title="${esc(e.event)} · ${esc(e.type)}">${esc(e.event)}</span></td>
-      <td class="num c-act${signClass(e.actual)}${verdict ? " " + verdict : ""}"${verdict ? ` title="${verdictTitle(e, verdict)}"` : ""}><span class="val">${fmtVal(e.actual, e.unit)}</span></td>
+      <td class="num c-act${signClass(e.actual)}${verdict ? " " + verdict : ""}"${verdict ? ` title="${verdictTitle(e, verdict, Directions.basis(e, usePrev))}"` : ""}><span class="val">${fmtVal(e.actual, e.unit)}</span></td>
       <td class="num c-fc">${fmtVal(e.estimate, e.unit)}</td>
       <td class="num c-prev${signClass(e.prev)}"><span class="val">${fmtVal(e.prev, e.unit)}</span></td>
       <td class="c-alert">${this.bellHtml(e, now)}</td>
@@ -141,8 +142,8 @@ class EventsTable {
 const signClass = v => (v == null || !Number(v) ? "" : Number(v) > 0 ? " pos" : " neg");
 
 // Tooltip on a filled Actual cell, saying which way counts as better for the report.
-const verdictTitle = (e, v) =>
-  `${v === "better" ? "Better" : "Worse"} than forecast (${e.direction === "higher" ? "higher" : "lower"} is better for this report)`;
+const verdictTitle = (e, v, against) =>
+  `${v === "better" ? "Better" : "Worse"} than ${against} (${e.direction === "higher" ? "higher" : "lower"} is better for this report)`;
 
 function fmtVal(v, unit) {
   if (v == null) return '<span class="dash" aria-label="Not available">—</span>';

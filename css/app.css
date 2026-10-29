@@ -89,6 +89,16 @@ button { cursor: pointer; }
 .userbar { display: flex; justify-content: flex-end; margin: -8px 0 4px; }
 /* Log out is "hidden in plain sight": same colour as the page, still clickable and reachable with Tab */
 #logout, #logout:hover { color: var(--bg); text-decoration: none; }
+/* Testing only: Finnhub | MotiveWave connection switch, two joined ToggleButtons (JavaFX left-pill / right-pill) */
+.userbar { align-items: center; gap: 16px; }
+.conn-toggle { display: inline-flex; }
+.conn-toggle button { height: 24px; padding: 0 10px; font-size: 12px; font-weight: 500; color: var(--fg); border: 1px solid var(--btn-border);
+  background: linear-gradient(var(--btn-top), var(--btn-bot)); }
+.conn-toggle button:first-child { border-radius: 3px 0 0 3px; }
+.conn-toggle button:last-child { border-radius: 0 3px 3px 0; border-left: 0; }
+.conn-toggle button:hover { background: linear-gradient(var(--btn-hover-top), var(--btn-hover-bot)); }
+.conn-toggle button[aria-checked="true"] { color: #fff; border-color: var(--def-border); background: linear-gradient(var(--def-top), var(--def-bot));
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .25); }
 .top { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 24px; margin-bottom: 36px; }
 /* Time zone | settings, on the title line */
 .top-acts { display: flex; align-items: center; gap: 12px; margin-left: auto; font-size: 12.5px; }
@@ -317,7 +327,12 @@ td.num.neg { color: var(--neg); }
 .imp-low i:nth-child(1) { background: var(--low); }
 .imp-medium i:nth-child(-n+2) { background: var(--med); }
 .imp-high i { background: var(--high); }
-.imp-txt { margin-left: 6px; font-size: 11.5px; color: var(--muted); align-self: center; }
+/* Impact column: outlined chip (a JavaFX Label with a border), text and border in the impact colour */
+.imp-chip { display: inline-block; min-width: 42px; padding: 1px 5px; border: 1px solid currentColor; border-radius: 3px; text-align: center;
+  font-size: 10.5px; font-weight: 600; letter-spacing: .04em; line-height: 14px; vertical-align: middle; }
+.imp-chip.imp-high { color: var(--high); }
+.imp-chip.imp-medium { color: var(--med); }
+.imp-chip.imp-low { color: var(--low); }
 
 /* Finished events (released, or past with no value) grey their time */
 tr[data-status="released"] .c-time, tr[data-status="past"] .c-time { color: var(--muted); }
@@ -544,8 +559,8 @@ tbody tr[data-alert="triggered"]:hover td { background: color-mix(in srgb, var(-
 .day-toggle:hover .ico.arrow { color: var(--fg); }
 .day-toggle .day-tag { margin-left: 0; }
 .day-n { font-size: 12px; font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; }
-/* The count sits in the Impact column, right-aligned so it ends at that column's
-   right edge (less the 8px cell padding) */
+/* The count sits in the Country column (the third, after Time and Impact), right-aligned
+   so it ends at that column's right edge (less the 8px cell padding) */
 @media (min-width: 561px) {
   tr.day th { position: relative; }
   .day-n { position: absolute; left: calc(var(--w-time) + var(--w-ctry) + var(--w-imp) - 8px); top: 50%; transform: translate(-100%, -50%); white-space: nowrap; }
@@ -669,7 +684,6 @@ tbody tr[data-alert="triggered"]:hover td { background: color-mix(in srgb, var(-
   .c-alert { order: 5; margin: -6px -8px -6px 0; }
   .bell { width: 40px; height: 36px; }
   .c-imp { order: 7; width: 44px; }
-  .imp-txt { display: none; } /* bars alone show the level here; the label is still announced */
   td.num { order: 8; flex: 1 1 0; min-width: 0; text-align: left; overflow: hidden; text-overflow: ellipsis; font-size: 13px; }
   td.c-fc { order: 9; }
   td.c-prev { order: 10; }

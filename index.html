@@ -36,7 +36,13 @@
 </main>
 
 <div class="wrap" id="app" hidden>
-  <div class="userbar"><button type="button" class="linkbtn" id="logout">Log out</button></div>
+  <div class="userbar">
+    <!-- Testing only: which connection the calendar data comes from -->
+    <div class="conn-toggle" id="connToggle" role="radiogroup" aria-label="Data connection (testing)" title="Data connection, for testing">
+      <button type="button" role="radio" data-conn="finnhub" aria-checked="true">Finnhub</button><button type="button" role="radio" data-conn="motivewave" aria-checked="false">MotiveWave</button>
+    </div>
+    <button type="button" class="linkbtn" id="logout">Log out</button>
+  </div>
   <header class="top">
     <h1>Economic Calendar</h1>
     <div class="top-acts">
@@ -85,13 +91,13 @@
   <div class="tablebox">
     <table>
       <colgroup>
-        <col class="w-time"><col class="w-ctry"><col class="w-imp"><col class="w-ev">
+        <col class="w-time"><col class="w-imp"><col class="w-ctry"><col class="w-ev">
         <col class="w-num"><col class="w-num"><col class="w-num"><col class="w-alert">
       </colgroup>
       <thead><tr>
         <th scope="col" id="thTime">Time</th>
-        <th scope="col">Country</th>
         <th scope="col">Impact</th>
+        <th scope="col">Country</th>
         <th scope="col">Event</th>
         <th scope="col" class="num">Actual</th>
         <th scope="col" class="num">Forecast</th>
@@ -124,6 +130,7 @@
 <!-- Services -->
 <script src="js/services/vault.js"></script>
 <script src="js/services/finnhub.js"></script>
+<script src="js/services/motivewave.js"></script>
 <!-- UI components -->
 <script src="js/ui/html.js"></script>
 <script src="js/ui/icons.js"></script>

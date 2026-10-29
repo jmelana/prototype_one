@@ -4,7 +4,8 @@
 //     groups, alerts,                      CountryGroups / Alerts instances
 //     countries: () => [code],             every country the user can pick
 //     valueColors: { get() -> { mode: "bluepink" | "greenred" | "custom", pos?, neg? }, set(value), current() -> { pos, neg },
-//                    style() -> "text" | "indicator", setStyle(value) },
+//                    style() -> "text" | "indicator", setStyle(value),
+//                    usePrevious() -> bool, setUsePrevious(on) },
 //     timezone: { options(selectedId) -> <option> HTML, get(), set(id) },
 //     theme: { get() -> "dark" | "light" | "system", set(value) },
 //     onClose(),
@@ -334,6 +335,7 @@ class SettingsPanel {
     p.querySelector("[name=negColor]").value = now.neg;
     const style = this.opts.valueColors.style();
     p.querySelector(`[name=vstyle][value="${style}"]`).checked = true;
+    p.querySelector("[name=indPrev]").checked = this.opts.valueColors.usePrevious();
     this.renderValueStyle(style);
     this.showHex();
     this.showContrastWarning();
@@ -343,8 +345,9 @@ class SettingsPanel {
   renderValueStyle(style) {
     const p = this.panes.display, ind = style === "indicator";
     p.querySelector("[data-vstyle-desc]").textContent = ind
-      ? "Fills the Actual cell when it beats or misses the forecast, from the currency's point of view. For example, a higher Unemployment Rate is worse, and higher inflation is better (it makes higher interest rates likely). Releases without a forecast aren't filled."
+      ? "Fills the Actual cell when it beats or misses the forecast, from the currency's point of view. For example, a higher Unemployment Rate is worse, and higher inflation is better (it makes higher interest rates likely)."
       : "Positive numbers in the Actual and Previous columns use the positive color, and negative numbers the negative color.";
+    p.querySelector(".ind-prev").hidden = !ind;
     const [pos, neg] = ind ? ["Better than forecast", "Worse than forecast"] : ["Positive", "Negative"];
     p.querySelector("[data-pos-label]").textContent = pos;
     p.querySelector("[data-neg-label]").textContent = neg;
@@ -398,6 +401,10 @@ class SettingsPanel {
         <label class="check"><input type="radio" name="vstyle" value="indicator"> Indicator</label>
       </div>
       <p class="set-desc" data-vstyle-desc></p>
+      <div class="ind-prev">
+        <label class="check"><input type="checkbox" name="indPrev"> When there's no forecast, compare with Previous</label>
+        <p class="set-desc">When off, releases without a forecast aren't filled.</p>
+      </div>
       <span class="field-label" id="vcLbl">Colors</span>
       <div class="vc-options" role="radiogroup" aria-labelledby="vcLbl">
         <label class="check"><input type="radio" name="vc" value="bluepink"> Blue / pink</label>
@@ -417,6 +424,7 @@ class SettingsPanel {
     });
     const vc = this.opts.valueColors;
     for (const r of p.querySelectorAll("[name=vstyle]")) r.addEventListener("change", e => { vc.setStyle(e.target.value); this.renderDisplay(); });
+    p.querySelector("[name=indPrev]").addEventListener("change", e => vc.setUsePrevious(e.target.checked));
     p.querySelector('[aria-labelledby="vcLbl"]').addEventListener("change", e => {
       // Choosing Custom starts from the colors currently shown.
       vc.set(e.target.value === "custom" ? { mode: "custom", ...vc.current() } : { mode: e.target.value });
